@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block title %}Tax Calculator - SA Tax Manager{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">
+        <i class="bi bi-calculator-fill"></i> Provisional Tax Calculator
+    </h1>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Calculation Parameters</h5>
+                </div>
+                <div class="card-body">
+                    <form id="taxForm">
+                        <div class="mb-3">
+                            <label for="startDate" class="form-label">Period Start Date</label>
+                            <input type="date" class="form-control" id="startDate" required>
+                            <small class="text-muted">
+                                First Provisional: 1 Mar | Second Provisional: 1 Sep
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="endDate" class="form-label">Period End Date</label>
+                            <input type="date" class="form-control" id="endDate" required>
+                            <small class="text-muted">
+                                First Provisional: 31 Aug | Second Provisional: 28/29 Feb
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="age" class="form-label">Your Age</label>
+                            <input type="number" class="form-control" id="age" value="0" min="0" max="120">
+                            <small class="text-muted">
+                                Age rebates: 65+ and 75+
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="medicalAid" class="form-label">Medical Aid Members</label>
+                            <input type="number" class="form-control" id="medicalAid" value="0" min="0" max="20">
+                            <small class="text-muted">
+                                0 = None, 1 = Main member only, 2+ = Main + dependents
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="previousPayments" class="form-label">
+                                Previous Tax Payments (R)
+                            </label>
+                            <input type="number" class="form-control" id="previousPayments"
+                                   value="0" min="0" step="0.01">
+                            <small class="text-muted">
+                                Tax already paid this year (for second provisional)
+                            </small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-calculator"></i> Calculate Tax
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-info-circle"></i> 2025/2026 Tax Rates
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Income (R)</th>
+                                    <th>Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>0 - 237,100</td><td>18%</td></tr>
+                                <tr><td>237,101 - 370,500</td><td>26%</td></tr>
+                                <tr><td>370,501 - 512,800</td><td>31%</td></tr>
+                                <tr><td>512,801 - 673,000</td><td>36%</td></tr>
+                                <tr><td>673,001 - 857,900</td><td>39%</td></tr>
+                                <tr><td>857,901 - 1,817,000</td><td>41%</td></tr>
+                                <tr><td>1,817,001+</td><td>45%</td></tr>
+                            </tbody>
+                        </table>
+                        <hr>
+                        <strong>Rebates:</strong><br>
+                        Primary: R17,235<br>
+                        Age 65+: R9,444<br>
+                        Age 75+: R3,145
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div id="loadingSpinner" class="text-center d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Calculating tax...</p>
+            </div>
+
+            <div id="resultsSection" class="d-none">
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-file-earmark-check"></i> Tax Calculation Results
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted">Period Summary</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td>Period Length:</td>
+                                        <td class="text-end"><strong id="periodMonths"></strong> months</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Transactions:</td>
+                                        <td class="text-end"><strong id="transactionCount"></strong></td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td><strong>Total Income:</strong></td>
+                                        <td class="text-end">
+                                            <strong>R <span id="periodIncome"></span></strong>
+                                        </td>
+                                    </tr>
+                                    <tr class="table-warning">
+                                        <td><strong>Total Expenses:</strong></td>
+                                        <td class="text-end">
+                                            <strong>R <span id="periodExpenses"></span></strong>
+                                        </td>
+                                    </tr>
+                                    <tr class="table-success">
+                                        <td><strong>Net Profit:</strong></td>
+                                        <td class="text-end">
+                                            <strong>R <span id="periodProfit"></span></strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted">Annual Estimate</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td>Estimated Annual Income:</td>
+                                        <td class="text-end">
+                                            <strong>R <span id="annualEstimate"></span></strong>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Tax Before Rebates:</td>
+                                        <td class="text-end">R <span id="taxBeforeRebates"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Rebates:</td>
+                                        <td class="text-end">- R <span id="rebates"></span></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Medical Credits:</td>
+                                        <td class="text-end">- R <span id="medicalCredits"></span></td>
+                                    </tr>
+                                    <tr class="table-info">
+                                        <td><strong>Estimated Annual Tax:</strong></td>
+                                        <td class="text-end">
+                                            <strong>R <span id="annualTax"></span></strong>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Effective Tax Rate:</td>
+                                        <td class="text-end"><span id="effectiveRate"></span>%</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-success mt-3">
+                            <h5 class="alert-heading">
+                                <i class="bi bi-cash-coin"></i> Provisional Payment Required
+                            </h5>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-1">Previous Payments:</p>
+                                    <h6>R <span id="previousPaymentsDisplay"></span></h6>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-1">
+                                        <strong>Amount Due:</strong>
+                                    </p>
+                                    <h3 class="mb-0 text-success">
+                                        R <span id="provisionalPayment"></span>
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="bi bi-pie-chart"></i> Expense Breakdown
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="expenseBreakdown"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorSection" class="alert alert-danger d-none">
+                <h5 class="alert-heading">
+                    <i class="bi bi-exclamation-triangle"></i> Error
+                </h5>
+                <p id="errorMessage"></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('taxForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Show loading, hide results/errors
+    document.getElementById('loadingSpinner').classList.remove('d-none');
+    document.getElementById('resultsSection').classList.add('d-none');
+    document.getElementById('errorSection').classList.add('d-none');
+
+    // Get form data
+    const formData = {
+        start_date: document.getElementById('startDate').value,
+        end_date: document.getElementById('endDate').value,
+        age: document.getElementById('age').value,
+        medical_aid_members: document.getElementById('medicalAid').value,
+        previous_payments: document.getElementById('previousPayments').value
+    };
+
+    try {
+        const response = await fetch('/api/calculate_tax', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            displayResults(data.calculation, data.transaction_count);
+        } else {
+            showError(data.error || 'Unknown error occurred');
+        }
+    } catch (error) {
+        showError('Failed to calculate tax: ' + error.message);
+    } finally {
+        document.getElementById('loadingSpinner').classList.add('d-none');
+    }
+});
+
+function displayResults(calc, transCount) {
+    // Period summary
+    document.getElementById('periodMonths').textContent = calc.period_months;
+    document.getElementById('transactionCount').textContent = transCount;
+    document.getElementById('periodIncome').textContent = formatCurrency(calc.period_income);
+    document.getElementById('periodExpenses').textContent = formatCurrency(calc.period_expenses);
+    document.getElementById('periodProfit').textContent = formatCurrency(calc.period_profit);
+
+    // Annual estimate
+    document.getElementById('annualEstimate').textContent = formatCurrency(calc.annual_estimate);
+    document.getElementById('taxBeforeRebates').textContent =
+        formatCurrency(calc.tax_breakdown.tax_before_rebates);
+    document.getElementById('rebates').textContent =
+        formatCurrency(calc.tax_breakdown.rebates);
+    document.getElementById('medicalCredits').textContent =
+        formatCurrency(calc.tax_breakdown.medical_credits);
+    document.getElementById('annualTax').textContent =
+        formatCurrency(calc.estimated_annual_tax);
+    document.getElementById('effectiveRate').textContent = calc.effective_rate;
+
+    // Provisional payment
+    document.getElementById('previousPaymentsDisplay').textContent =
+        formatCurrency(calc.previous_payments);
+    document.getElementById('provisionalPayment').textContent =
+        formatCurrency(calc.provisional_payment);
+
+    // Expense breakdown
+    displayExpenseBreakdown(calc.expense_breakdown);
+
+    // Show results
+    document.getElementById('resultsSection').classList.remove('d-none');
+}
+
+function displayExpenseBreakdown(breakdown) {
+    const container = document.getElementById('expenseBreakdown');
+
+    if (Object.keys(breakdown).length === 0) {
+        container.innerHTML = '<p class="text-muted">No expense categories found.</p>';
+        return;
+    }
+
+    let html = '<table class="table table-sm table-striped">';
+    html += '<thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>';
+    html += '<tbody>';
+
+    // Sort by amount descending
+    const sorted = Object.entries(breakdown).sort((a, b) =>
+        parseFloat(b[1]) - parseFloat(a[1])
+    );
+
+    for (const [category, amount] of sorted) {
+        html += `<tr>
+            <td>${category}</td>
+            <td class="text-end">R ${formatCurrency(amount)}</td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function formatCurrency(value) {
+    const num = parseFloat(value);
+    return num.toLocaleString('en-ZA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorSection').classList.remove('d-none');
+}
+
+// Set default dates for first provisional period (Mar 1 - Aug 31)
+window.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const year = now.getFullYear();
+
+    // Default to current year's first provisional period
+    document.getElementById('startDate').value = `${year}-03-01`;
+    document.getElementById('endDate').value = `${year}-08-31`;
+});
+</script>
+{% endblock %}

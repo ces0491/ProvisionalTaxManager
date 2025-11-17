@@ -215,13 +215,21 @@ def categorize_transaction(description, amount):
     """
     description_upper = description.upper()
 
-    # Special case: Income (PRECISE DIGITAL)
-    if 'PRECISE DIGITAL' in description_upper or 'PRECISE DIGITA' in description_upper:
-        # If it's a teletransmission FEE, it's a business expense
-        if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
-            return ('banking_fees', 1.0)
-        # Otherwise it's income
-        return ('income', 1.0)
+    # Special case: Income (PRECISE DIGITAL and other income sources)
+    # Check for known income patterns
+    income_patterns = [
+        'PRECISE DIGITAL',
+        'PRECISE DIGITA',
+        # Additional patterns will be added via database rules
+    ]
+
+    for pattern in income_patterns:
+        if pattern in description_upper:
+            # If it's a teletransmission FEE, it's a business expense
+            if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
+                return ('banking_fees', 1.0)
+            # Otherwise it's income
+            return ('income', 1.0)
 
     # Check each category
     import re
@@ -272,6 +280,63 @@ def is_personal_from_business_mixed(description):
         # In the UI, user can split these
         return True
     return False
+
+
+def categorize_transaction_with_rules(description, amount, db_rules=None):
+    """
+    Enhanced categorization using database rules
+
+    Args:
+        description: Transaction description
+        amount: Transaction amount
+        db_rules: List of ExpenseRule objects from database (optional)
+
+    Returns:
+        (category_name, confidence_score)
+    """
+    description_upper = description.upper()
+    import re
+
+    # If database rules provided, check them first (higher priority)
+    if db_rules:
+        # Sort by priority (higher first)
+        sorted_rules = sorted(db_rules, key=lambda r: r.priority, reverse=True)
+
+        for rule in sorted_rules:
+            if not rule.is_active:
+                continue
+
+            pattern = rule.pattern.upper()
+
+            # Check if pattern matches
+            if rule.is_regex:
+                try:
+                    if re.search(pattern, description_upper):
+                        # Special handling for income with fees
+                        if rule.category.category_type == 'income':
+                            if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
+                                # This is a fee, not income
+                                continue
+                        return (rule.category.name, 1.0)
+                except re.error:
+                    # Invalid regex, skip
+                    continue
+            else:
+                # Simple substring match
+                if pattern in description_upper:
+                    # Special handling for income with fees
+                    if rule.category.category_type == 'income':
+                        if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
+                            # This is a fee, not income
+                            continue
+                    return (rule.category.name, 1.0)
+
+    # Fall back to hardcoded categorization
+    category_key, score = categorize_transaction(description, amount)
+    if category_key and category_key in CATEGORIES:
+        return (CATEGORIES[category_key]['name'], score)
+
+    return (None, 0.0)
 
 
 def init_categories_in_db(db, Category):

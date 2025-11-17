@@ -5,10 +5,12 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 
 from config import Config
-from models import db, Account, Statement, Category, Transaction
+from models import db, Account, Statement, Category, Transaction, ExpenseRule
 from pdf_parser import BankStatementParser, detect_duplicates
 from categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
 from excel_export import generate_tax_export
+from tax_calculator import calculate_tax_from_transactions
+from decimal import Decimal
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -223,6 +225,128 @@ def delete_transaction(id):
     return redirect(url_for('transactions'))
 
 
+@app.route('/transaction/add', methods=['GET', 'POST'])
+@login_required
+def add_transaction():
+    """Add a manual transaction"""
+    if request.method == 'POST':
+        # Get the first statement or create a placeholder
+        statement = Statement.query.first()
+        if not statement:
+            # Create a placeholder account and statement for manual entries
+            account = Account.query.filter_by(name='Manual Entries').first()
+            if not account:
+                account = Account(
+                    name='Manual Entries',
+                    account_type='manual',
+                    account_number='MANUAL'
+                )
+                db.session.add(account)
+                db.session.flush()
+
+            statement = Statement(
+                account_id=account.id,
+                start_date=datetime(2025, 1, 1).date(),
+                end_date=datetime(2025, 12, 31).date(),
+                filename='manual_entries.txt'
+            )
+            db.session.add(statement)
+            db.session.flush()
+
+        # Create transaction
+        transaction = Transaction(
+            statement_id=statement.id,
+            date=datetime.strptime(request.form.get('date'), '%Y-%m-%d').date(),
+            description=request.form.get('description'),
+            amount=Decimal(request.form.get('amount', '0')),
+            category_id=request.form.get('category_id', type=int) or None,
+            notes=request.form.get('notes'),
+            is_manual=True
+        )
+
+        db.session.add(transaction)
+        db.session.commit()
+        flash('Manual transaction added successfully', 'success')
+        return redirect(url_for('transactions'))
+
+    categories = Category.query.all()
+    return render_template('add_transaction.html', categories=categories)
+
+
+@app.route('/transaction/<int:id>/split', methods=['GET', 'POST'])
+@login_required
+def split_transaction(id):
+    """Split a transaction into business and personal portions"""
+    parent = Transaction.query.get_or_404(id)
+
+    if request.method == 'POST':
+        business_amount = Decimal(request.form.get('business_amount', '0'))
+        personal_amount = Decimal(request.form.get('personal_amount', '0'))
+        business_category_id = request.form.get('business_category_id', type=int)
+        personal_category_id = request.form.get('personal_category_id', type=int)
+        business_notes = request.form.get('business_notes', '')
+        personal_notes = request.form.get('personal_notes', '')
+
+        # Validate amounts
+        total = business_amount + personal_amount
+        if abs(total - abs(parent.amount)) > Decimal('0.01'):
+            flash(
+                f'Split amounts (R{total}) must equal original amount '
+                f'(R{abs(parent.amount)})',
+                'error'
+            )
+            categories = Category.query.all()
+            return render_template(
+                'split_transaction.html',
+                transaction=parent,
+                categories=categories
+            )
+
+        # Mark original as deleted (it's being replaced by splits)
+        parent.is_deleted = True
+
+        # Create business portion
+        if business_amount > 0:
+            business_trans = Transaction(
+                statement_id=parent.statement_id,
+                date=parent.date,
+                description=f"{parent.description} (Business portion)",
+                amount=-business_amount,  # Negative for expense
+                category_id=business_category_id,
+                is_manual=True,
+                notes=business_notes,
+                original_amount=parent.amount,
+                parent_transaction_id=parent.id
+            )
+            db.session.add(business_trans)
+
+        # Create personal portion
+        if personal_amount > 0:
+            personal_trans = Transaction(
+                statement_id=parent.statement_id,
+                date=parent.date,
+                description=f"{parent.description} (Personal portion)",
+                amount=-personal_amount,  # Negative for expense
+                category_id=personal_category_id,
+                is_manual=True,
+                notes=personal_notes,
+                original_amount=parent.amount,
+                parent_transaction_id=parent.id
+            )
+            db.session.add(personal_trans)
+
+        db.session.commit()
+        flash('Transaction split successfully', 'success')
+        return redirect(url_for('transactions'))
+
+    categories = Category.query.all()
+    return render_template(
+        'split_transaction.html',
+        transaction=parent,
+        categories=categories
+    )
+
+
 @app.route('/export')
 @login_required
 def export():
@@ -296,6 +420,198 @@ def mark_duplicate():
         return jsonify({'success': True})
 
     return jsonify({'success': False, 'error': 'Transaction not found'}), 404
+
+
+@app.route('/tax_calculator')
+@login_required
+def tax_calculator():
+    """Tax calculator page"""
+    return render_template('tax_calculator.html')
+
+
+@app.route('/api/calculate_tax', methods=['POST'])
+@login_required
+def calculate_tax():
+    """Calculate tax based on filters and parameters"""
+    data = request.get_json()
+
+    # Get filter parameters
+    start_date_str = data.get('start_date')
+    end_date_str = data.get('end_date')
+    age = int(data.get('age', 0))
+    medical_aid_members = int(data.get('medical_aid_members', 0))
+    previous_payments = Decimal(data.get('previous_payments', '0'))
+
+    # Parse dates
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return jsonify({
+            'success': False,
+            'error': 'Invalid date format'
+        }), 400
+
+    # Get transactions in date range
+    transactions = Transaction.query.filter(
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.is_duplicate == False,  # noqa: E712
+        Transaction.date >= start_date,
+        Transaction.date <= end_date
+    ).all()
+
+    # Convert to list of dicts
+    trans_list = []
+    for t in transactions:
+        category_name = t.category.name if t.category else 'Uncategorized'
+        trans_list.append({
+            'id': t.id,
+            'date': t.date,
+            'description': t.description,
+            'amount': t.amount,
+            'category': category_name
+        })
+
+    # Calculate tax (pass db session for loading tax tables from database)
+    tax_result = calculate_tax_from_transactions(
+        transactions=trans_list,
+        period_start=start_date,
+        period_end=end_date,
+        age=age,
+        medical_aid_members=medical_aid_members,
+        previous_payments=previous_payments,
+        db_session=db.session
+    )
+
+    # Convert Decimals to strings for JSON serialization
+    result = {
+        'success': True,
+        'calculation': {
+            'period_months': tax_result['period_months'],
+            'period_income': str(tax_result['period_income']),
+            'period_expenses': str(tax_result['period_expenses']),
+            'period_profit': str(tax_result['period_profit']),
+            'annual_estimate': str(tax_result['annual_estimate']),
+            'estimated_annual_tax': str(tax_result['estimated_annual_tax']),
+            'previous_payments': str(tax_result['previous_payments']),
+            'provisional_payment': str(tax_result['provisional_payment']),
+            'effective_rate': str(tax_result['effective_rate']),
+            'tax_breakdown': {
+                'taxable_income': str(tax_result['tax_breakdown']['taxable_income']),
+                'tax_before_rebates': str(
+                    tax_result['tax_breakdown']['tax_before_rebates']
+                ),
+                'rebates': str(tax_result['tax_breakdown']['rebates']),
+                'medical_credits': str(
+                    tax_result['tax_breakdown']['medical_credits']
+                ),
+                'tax_liability': str(tax_result['tax_breakdown']['tax_liability']),
+                'effective_rate': str(tax_result['tax_breakdown']['effective_rate']),
+                'age': tax_result['tax_breakdown']['age'],
+                'medical_aid_members': tax_result['tax_breakdown']['medical_aid_members'],
+            },
+            'expense_breakdown': {
+                k: str(v) for k, v in tax_result['expense_breakdown'].items()
+            }
+        },
+        'transaction_count': len(trans_list)
+    }
+
+    return jsonify(result)
+
+
+@app.route('/income_sources')
+@login_required
+def income_sources():
+    """Manage income sources and categorization rules"""
+    # Get income category
+    income_category = Category.query.filter_by(name='Income').first()
+
+    if income_category:
+        # Get all rules for income category
+        income_rules = ExpenseRule.query.filter_by(
+            category_id=income_category.id
+        ).order_by(ExpenseRule.priority.desc()).all()
+    else:
+        income_rules = []
+
+    # Get all categories for adding new rules
+    all_categories = Category.query.order_by(Category.name).all()
+
+    # Get all rules for display
+    all_rules = ExpenseRule.query.order_by(
+        ExpenseRule.priority.desc(),
+        ExpenseRule.pattern
+    ).all()
+
+    return render_template(
+        'income_sources.html',
+        income_rules=income_rules,
+        all_rules=all_rules,
+        categories=all_categories,
+        income_category=income_category
+    )
+
+
+@app.route('/api/income_source/add', methods=['POST'])
+@login_required
+def add_income_source():
+    """Add a new income source pattern"""
+    data = request.get_json()
+
+    pattern = data.get('pattern', '').strip()
+    category_id = int(data.get('category_id', 0)) if data.get('category_id') else None
+    is_regex = data.get('is_regex', False)
+    priority = int(data.get('priority', 0))
+
+    if not pattern:
+        return jsonify({'success': False, 'error': 'Pattern is required'}), 400
+
+    if not category_id:
+        return jsonify({'success': False, 'error': 'Category is required'}), 400
+
+    # Create rule
+    rule = ExpenseRule(
+        pattern=pattern,
+        category_id=category_id,
+        is_regex=is_regex,
+        priority=priority,
+        is_active=True
+    )
+
+    db.session.add(rule)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'rule_id': rule.id,
+        'message': 'Income source added successfully'
+    })
+
+
+@app.route('/api/income_source/<int:id>/toggle', methods=['POST'])
+@login_required
+def toggle_income_source(id):
+    """Toggle active status of an income source"""
+    rule = ExpenseRule.query.get_or_404(id)
+    rule.is_active = not rule.is_active
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'is_active': rule.is_active
+    })
+
+
+@app.route('/api/income_source/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_income_source(id):
+    """Delete an income source pattern"""
+    rule = ExpenseRule.query.get_or_404(id)
+    db.session.delete(rule)
+    db.session.commit()
+
+    return jsonify({'success': True})
 
 
 @app.cli.command()

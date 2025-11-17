@@ -4,8 +4,13 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12">
+    <div class="col-md-8">
         <h1><i class="bi bi-list-ul"></i> All Transactions</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('add_transaction') }}" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Add Manual Transaction
+        </a>
     </div>
 </div>
 
@@ -71,12 +76,33 @@
                             {% endif %}
                         </td>
                         <td>{{ trans.statement.account.name }}</td>
-                        <td>
-                            <a href="{{ url_for('edit_transaction', id=trans.id) }}" class="btn btn-sm btn-outline-primary">
+                        <td class="text-nowrap">
+                            {% if trans.is_manual %}
+                                <span class="badge bg-info text-dark me-1" title="Manually added">
+                                    <i class="bi bi-hand-index"></i>
+                                </span>
+                            {% endif %}
+                            {% if trans.parent_transaction_id %}
+                                <span class="badge bg-warning text-dark me-1" title="Split from original">
+                                    <i class="bi bi-scissors"></i>
+                                </span>
+                            {% endif %}
+                            <a href="{{ url_for('edit_transaction', id=trans.id) }}"
+                               class="btn btn-sm btn-outline-primary"
+                               title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form method="POST" action="{{ url_for('delete_transaction', id=trans.id) }}" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this transaction?')">
+                            <a href="{{ url_for('split_transaction', id=trans.id) }}"
+                               class="btn btn-sm btn-outline-warning"
+                               title="Split into business/personal">
+                                <i class="bi bi-scissors"></i>
+                            </a>
+                            <form method="POST"
+                                  action="{{ url_for('delete_transaction', id=trans.id) }}"
+                                  style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                        onclick="return confirm('Delete this transaction?')"
+                                        title="Delete">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>

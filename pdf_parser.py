@@ -1,7 +1,7 @@
 import pdfplumber
 import re
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 class BankStatementParser:
     """Parse Standard Bank PDF statements"""
@@ -217,7 +217,7 @@ class BankStatementParser:
 
         try:
             amount = Decimal(amount_str)
-        except:
+        except (ValueError, InvalidOperation):
             return None
 
         description = ' '.join(description_parts)
@@ -434,7 +434,6 @@ class BankStatementParser:
         # Also handle cases where sign is separate: "- 199.98" becomes ["-", "199.98"]
         amounts = []
         description_parts = []
-        sign_modifier = None
 
         i = 0
         while i < len(parts):
@@ -447,7 +446,6 @@ class BankStatementParser:
                 if re.match(r'^[\d,]+\.\d{2}$', next_part):
                     # Combine sign with number
                     amounts.append(part + next_part.replace(',', '').replace(' ', ''))
-                    sign_modifier = part
                     i += 2  # Skip both parts
                     continue
                 else:
@@ -479,7 +477,7 @@ class BankStatementParser:
                 amount = Decimal(amount_str[1:])
             else:
                 amount = Decimal(amount_str)
-        except:
+        except (ValueError, InvalidOperation):
             return None
 
         description = ' '.join(description_parts)
@@ -487,7 +485,7 @@ class BankStatementParser:
         # Parse date
         try:
             transaction_date = self._parse_date(date_str)
-        except:
+        except (ValueError, AttributeError):
             return None
 
         return {

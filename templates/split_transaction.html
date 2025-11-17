@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Split Transaction - SA Tax Manager{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-scissors"></i> Split Transaction
+                </h1>
+                <a href="{{ url_for('transactions') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Transactions
+                </a>
+            </div>
+
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Important:</strong> Splitting this transaction will mark
+                the original as deleted and create two new transactions (business
+                and personal portions). This action cannot be easily undone.
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Original Transaction</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Date:</strong><br>
+                            {{ transaction.date.strftime('%d %b %Y') }}
+                        </div>
+                        <div class="col-md-5">
+                            <strong>Description:</strong><br>
+                            {{ transaction.description }}
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Amount:</strong><br>
+                            <span class="text-danger">
+                                R {{ "%.2f"|format(transaction.amount|abs) }}
+                            </span>
+                        </div>
+                        <div class="col-md-2">
+                            <strong>Category:</strong><br>
+                            {% if transaction.category %}
+                                {{ transaction.category.name }}
+                            {% else %}
+                                <em>Uncategorized</em>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form method="POST">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-briefcase"></i> Business Portion
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="business_amount" class="form-label">
+                                        Amount (R) <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" class="form-control"
+                                           id="business_amount" name="business_amount"
+                                           step="0.01" required min="0"
+                                           placeholder="0.00">
+                                    <small class="text-muted">
+                                        Enter positive amount (e.g., 500.00)
+                                    </small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="business_category_id" class="form-label">
+                                        Category <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select" id="business_category_id"
+                                            name="business_category_id" required>
+                                        <option value="">-- Select Category --</option>
+                                        {% for category in categories %}
+                                            {% if category.category_type == 'business_expense' %}
+                                                <option value="{{ category.id }}">
+                                                    {{ category.name }}
+                                                </option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="business_notes" class="form-label">
+                                        Notes
+                                    </label>
+                                    <textarea class="form-control" id="business_notes"
+                                              name="business_notes" rows="2"
+                                              placeholder="e.g., Office supplies from order"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-warning">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-person"></i> Personal Portion
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="personal_amount" class="form-label">
+                                        Amount (R) <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" class="form-control"
+                                           id="personal_amount" name="personal_amount"
+                                           step="0.01" required min="0"
+                                           placeholder="0.00">
+                                    <small class="text-muted">
+                                        Enter positive amount (e.g., 300.00)
+                                    </small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="personal_category_id" class="form-label">
+                                        Category <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select" id="personal_category_id"
+                                            name="personal_category_id" required>
+                                        <option value="">-- Select Category --</option>
+                                        {% for category in categories %}
+                                            {% if category.category_type == 'personal_expense' %}
+                                                <option value="{{ category.id }}">
+                                                    {{ category.name }}
+                                                </option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="personal_notes" class="form-label">
+                                        Notes
+                                    </label>
+                                    <textarea class="form-control" id="personal_notes"
+                                              name="personal_notes" rows="2"
+                                              placeholder="e.g., Personal items from order"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <strong>Original Total:</strong>
+                                <h4 class="text-danger mb-0">
+                                    R {{ "%.2f"|format(transaction.amount|abs) }}
+                                </h4>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Split Total:</strong>
+                                <h4 class="mb-0" id="splitTotal">R 0.00</h4>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Difference:</strong>
+                                <h4 class="mb-0" id="difference">R 0.00</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-scissors"></i> Split Transaction
+                    </button>
+                    <a href="{{ url_for('transactions') }}" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const originalAmount = {{ transaction.amount|abs }};
+
+function updateTotals() {
+    const businessAmount = parseFloat(
+        document.getElementById('business_amount').value || 0
+    );
+    const personalAmount = parseFloat(
+        document.getElementById('personal_amount').value || 0
+    );
+    const splitTotal = businessAmount + personalAmount;
+    const difference = originalAmount - splitTotal;
+
+    document.getElementById('splitTotal').textContent =
+        'R ' + splitTotal.toFixed(2);
+    document.getElementById('difference').textContent =
+        'R ' + Math.abs(difference).toFixed(2);
+
+    // Color code the difference
+    const diffElement = document.getElementById('difference');
+    if (Math.abs(difference) < 0.01) {
+        diffElement.className = 'mb-0 text-success';
+    } else {
+        diffElement.className = 'mb-0 text-danger';
+    }
+}
+
+document.getElementById('business_amount').addEventListener('input', updateTotals);
+document.getElementById('personal_amount').addEventListener('input', updateTotals);
+
+// Auto-calculate remaining amount
+document.getElementById('business_amount').addEventListener('blur', function() {
+    const businessAmount = parseFloat(this.value || 0);
+    const personalInput = document.getElementById('personal_amount');
+    if (!personalInput.value) {
+        const remaining = originalAmount - businessAmount;
+        if (remaining > 0) {
+            personalInput.value = remaining.toFixed(2);
+            updateTotals();
+        }
+    }
+});
+</script>
+{% endblock %}
