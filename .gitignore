@@ -1,0 +1,9 @@
+*.pyc
+__pycache__/
+venv/
+.env
+*.db
+uploads/
+*.pdf
+.DS_Store
+.claude

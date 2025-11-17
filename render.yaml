@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: provisional-tax-manager
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /login
+    autoDeploy: false
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: AUTH_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: provisional-tax-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: 3.11.2
+
+databases:
+  - name: provisional-tax-db
+    databaseName: provisionaltax
+    user: taxmanager
+    plan: free
+    region: oregon

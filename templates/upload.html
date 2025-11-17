@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Statements{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="bi bi-file-earmark-arrow-up"></i> Upload Bank Statements</h1>
+        <p class="lead">Upload PDF statements from your cheques account, credit card, and mortgage</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Select PDF Files</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="files" class="form-label">Choose one or more PDF files</label>
+                        <input type="file" class="form-control" id="files" name="files[]" multiple accept=".pdf" required>
+                        <div class="form-text">You can select multiple files at once</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Upload and Process
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-header">
+                <h5 class="mb-0">Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Download PDF statements from your bank</li>
+                    <li>Select all 3 types:
+                        <ul>
+                            <li>Cheques/Signature account</li>
+                            <li>Credit card</li>
+                            <li>Mortgage/Home loan</li>
+                        </ul>
+                    </li>
+                    <li>Upload them together</li>
+                    <li>The app will automatically:
+                        <ul>
+                            <li>Parse transactions</li>
+                            <li>Categorize expenses</li>
+                            <li>Detect duplicates</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

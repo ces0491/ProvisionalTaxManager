@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Duplicate Transactions{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="bi bi-files"></i> Potential Duplicate Transactions</h1>
+        <p class="lead">Review and mark duplicate transactions from overlapping statement periods</p>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-12">
+        {% if duplicates %}
+        <div class="list-group">
+            {% for dup in duplicates %}
+            <div class="list-group-item">
+                <div class="row">
+                    <div class="col-md-5">
+                        <h6>Transaction 1</h6>
+                        <p class="mb-1"><strong>{{ dup.trans1.date.strftime('%d %b %Y') }}</strong></p>
+                        <p class="mb-1">{{ dup.trans1.description }}</p>
+                        <p class="mb-1">Amount: <strong>R {{ "%.2f"|format(dup.trans1.amount|abs) }}</strong></p>
+                        <p class="mb-0"><small class="text-muted">{{ dup.trans1.statement.account.name }}</small></p>
+                    </div>
+                    <div class="col-md-2 text-center align-self-center">
+                        <div class="badge bg-warning">{{ (dup.score * 100)|int }}% match</div>
+                    </div>
+                    <div class="col-md-5">
+                        <h6>Transaction 2</h6>
+                        <p class="mb-1"><strong>{{ dup.trans2.date.strftime('%d %b %Y') }}</strong></p>
+                        <p class="mb-1">{{ dup.trans2.description }}</p>
+                        <p class="mb-1">Amount: <strong>R {{ "%.2f"|format(dup.trans2.amount|abs) }}</strong></p>
+                        <p class="mb-0"><small class="text-muted">{{ dup.trans2.statement.account.name }}</small></p>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-danger" onclick="markDuplicate({{ dup.trans2.id }}, {{ dup.trans1.id }})">
+                        Mark Transaction 2 as Duplicate
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="markDuplicate({{ dup.trans1.id }}, {{ dup.trans2.id }})">
+                        Mark Transaction 1 as Duplicate
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle"></i> No duplicate transactions found!
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function markDuplicate(transId, duplicateOfId) {
+    if (!confirm('Mark this transaction as a duplicate?')) {
+        return;
+    }
+
+    fetch('{{ url_for("mark_duplicate") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            transaction_id: transId,
+            duplicate_of_id: duplicateOfId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Transaction marked as duplicate');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+</script>
+{% endblock %}

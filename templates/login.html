@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Login - SA Tax App{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-4">
+        <div class="card mt-5">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-lock"></i> Login</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required autofocus>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

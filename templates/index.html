@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1><i class="bi bi-house-door"></i> Dashboard</h1>
+        <p class="lead">Welcome to your SA Provisional Tax Manager</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> Upload Statements</h5>
+                <p class="card-text">Upload PDF bank statements for processing</p>
+                <a href="{{ url_for('upload') }}" class="btn btn-primary">Upload</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-list-ul"></i> Transactions</h5>
+                <p class="card-text">{{ total_transactions }} transactions loaded</p>
+                {% if uncategorized > 0 %}
+                <p class="text-warning">{{ uncategorized }} uncategorized</p>
+                {% endif %}
+                <a href="{{ url_for('transactions') }}" class="btn btn-primary">View All</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-file-earmark-excel"></i> Export Report</h5>
+                <p class="card-text">Generate Excel report for tax practitioner</p>
+                <div class="btn-group-vertical w-100">
+                    <a href="{{ url_for('export', period='first', year=2025) }}" class="btn btn-success btn-sm">
+                        First Provisional (Mar-Aug 2025)
+                    </a>
+                    <a href="{{ url_for('export', period='second', year=2025) }}" class="btn btn-success btn-sm">
+                        Second Provisional (Sep 25 - Feb 26)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <h3>Recent Statements</h3>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Period</th>
+                        <th>Uploaded</th>
+                        <th>Transactions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for statement in statements %}
+                    <tr>
+                        <td>{{ statement.account.name }}</td>
+                        <td>{{ statement.start_date.strftime('%d %b %Y') }} - {{ statement.end_date.strftime('%d %b %Y') }}</td>
+                        <td>{{ statement.upload_date.strftime('%d %b %Y %H:%M') }}</td>
+                        <td>{{ statement.transactions|length }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
