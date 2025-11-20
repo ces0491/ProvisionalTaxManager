@@ -3,7 +3,7 @@ Tests for pdf_parser module
 """
 from datetime import date
 
-from pdf_parser import BankStatementParser, detect_duplicates
+from src.services.pdf_parser import BankStatementParser, detect_duplicates
 
 
 class TestBankStatementParser:

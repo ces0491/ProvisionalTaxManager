@@ -199,7 +199,7 @@ The system allows you to toggle VAT display:
 
 Shows actual bank statement amounts:
 
-```
+```text
 Date       Description          Amount
 2025-03-20 GOOGLE WORKSPACE    -R115.00
 ```
@@ -208,7 +208,7 @@ Date       Description          Amount
 
 Shows amounts excluding VAT for accounting:
 
-```
+```text
 Date       Description          Amount Excl  VAT      Amount Incl
 2025-03-20 GOOGLE WORKSPACE    -R100.00     -R15.00  -R115.00
 ```
@@ -275,7 +275,7 @@ VAT and Income Tax are separate:
 
 **Example**:
 
-```
+```text
 Transaction: -R1,150 (incl VAT)
 VAT (15%): -R150
 Amount excl VAT: -R1,000

@@ -9,8 +9,12 @@ For subsequent years, either:
 Source: SARS Tax Tables 2025/2026
 https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/
 """
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from app import app
-from models import db, TaxYear, TaxBracket, TaxRebate, MedicalAidCredit
+from src.database.models import db, TaxYear, TaxBracket, TaxRebate, MedicalAidCredit
 from datetime import date
 from decimal import Decimal
 

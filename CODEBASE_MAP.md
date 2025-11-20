@@ -54,23 +54,47 @@ Quick reference for navigating the Provisional Tax Manager codebase.
 
 ### Import Graph
 
-```
-app.py
-├── models.py
-├── tax_calculator.py
-│   └── models.py (TaxYear, TaxBracket)
-├── vat_calculator.py
-│   └── models.py (VATConfig)
-├── categorizer.py
-│   └── models.py (Category, ExpenseRule)
-├── pdf_parser.py
-└── excel_export.py
-
-tests/
-├── conftest.py
-│   └── models.py
-└── test_*.py
-    └── conftest.py
+```text
+ProvisionalTaxManager/
+├── app.py                  # Main Flask application and routes
+├── src/                    # Source code package
+│   ├── __init__.py
+│   ├── config.py          # Application configuration
+│   ├── database/          # Database-related code
+│   │   ├── __init__.py
+│   │   └── models.py      # SQLAlchemy models
+│   ├── services/          # Business logic services
+│   │   ├── __init__.py
+│   │   ├── categorizer.py      # Transaction categorization
+│   │   ├── excel_export.py     # Excel report generation
+│   │   ├── pdf_parser.py       # PDF statement parsing
+│   │   ├── tax_calculator.py   # Tax calculations
+│   │   └── vat_calculator.py   # VAT calculations
+│   └── utils/             # Utility functions (empty for now)
+│       └── __init__.py
+├── scripts/               # Utility scripts
+│   ├── __init__.py
+│   ├── seed_tax_tables.py      # Seed SARS tax tables
+│   ├── seed_vat_config.py      # Seed VAT rates
+│   └── test_parser.py          # Parser testing script
+├── templates/             # Jinja2 HTML templates
+│   ├── base.html
+│   ├── index.html
+│   ├── transactions.html
+│   └── ... (other templates)
+├── tests/                 # Test suite
+│   ├── conftest.py       # Pytest configuration
+│   ├── test_categorizer.py
+│   ├── test_models.py
+│   ├── test_pdf_parser.py
+│   ├── test_routes.py
+│   └── test_tax_calculator.py
+├── instance/              # Flask instance folder (database)
+├── uploads/               # Uploaded PDF statements
+├── requirements.txt       # Python dependencies
+├── pytest.ini            # Pytest configuration
+├── .gitignore            # Git ignore rules
+└── README.md             # Main documentation
 ```
 
 ### Circular Dependencies
@@ -184,100 +208,3 @@ rm data/database.db    # Delete database
 python app.py          # Recreate on startup
 # Then re-run seed scripts
 ```
-
-## Code Statistics
-
-### Current Size
-
-- **Total Python Code**: ~2,200 lines
-- **Test Code**: ~800 lines
-- **Templates**: 11 HTML files
-- **Documentation**: ~1,500 lines markdown
-- **Total Project**: ~4,500 lines
-
-### Module Size Distribution
-
-```
-pdf_parser.py        ████████████████████ 540 lines (24%)
-app.py              ███████████████ 650 lines (29%)
-tax_calculator.py   ████████ 340 lines (15%)
-categorizer.py      ███████ 280 lines (13%)
-models.py           █████ 200 lines (9%)
-vat_calculator.py   ████ 190 lines (9%)
-```
-
-### Test Coverage
-
-**79 tests, 100% passing** ✓
-
-- Models: 18 tests
-- Routes: 26 tests
-- Tax Calculator: 12 tests
-- Categorizer: 20 tests
-- PDF Parser: 7 tests
-
-## Performance Considerations
-
-### Bottlenecks (None Currently)
-
-- PDF parsing: Fast (<2s per statement)
-- Tax calculations: Instant
-- Database queries: Fast (SQLite in-memory for tests)
-
-### Optimization Opportunities (Future)
-
-- Cache VAT rates (if querying frequently)
-- Batch transaction processing (if >10,000 transactions)
-- Index database columns (if >100,000 transactions)
-
-## Security Considerations
-
-### Current Security
-
-- ✓ Login required for all routes
-- ✓ Password authentication (`.env`)
-- ✓ CSRF protection disabled (single user app)
-- ✓ File upload validation (PDF only, 16MB max)
-- ✓ Soft deletion (transactions recoverable)
-- ✓ `.gitignore` protects `.env` and database
-
-### Future Security (If Multi-User)
-
-- Add user sessions
-- Enable CSRF protection
-- Hash passwords
-- Add role-based access control
-- Audit logging
-
-## Version History
-
-### v1.0.0 (Current)
-
-- ✓ PDF bank statement parsing
-- ✓ Transaction categorization
-- ✓ Income tax calculator (SARS 2025/2026)
-- ✓ VAT calculator (15% / 14% historical)
-- ✓ Manual transaction entry
-- ✓ Transaction splitting
-- ✓ Duplicate detection
-- ✓ Income source management
-- ✓ Tax calculator UI
-- ✓ Database-driven tax tables
-- ✓ Database-driven VAT rates
-- ✓ 79 tests, 100% passing
-
-## Contact & Support
-
-### Issues or Questions
-
-- Check `README.md` for usage guide
-- Check `VAT_GUIDE.md` for VAT questions
-- Check `TAX_TABLES_README.md` for tax table updates
-
-### Future Features Roadmap
-
-- VAT201 return export
-- Web UI for VAT management
-- Multi-account support (multiple users)
-- API endpoints for integrations
-- Mobile-responsive design improvements

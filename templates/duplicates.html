@@ -4,9 +4,14 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12">
+    <div class="col-md-8">
         <h1><i class="bi bi-files"></i> Potential Duplicate Transactions</h1>
         <p class="lead">Review and mark duplicate transactions from overlapping statement periods</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <button onclick="autoMarkExactDuplicates()" class="btn btn-primary">
+            <i class="bi bi-lightning-fill"></i> Auto-Mark 100% Duplicates
+        </button>
     </div>
 </div>
 
@@ -25,7 +30,9 @@
                         <p class="mb-0"><small class="text-muted">{{ dup.trans1.statement.account.name }}</small></p>
                     </div>
                     <div class="col-md-2 text-center align-self-center">
-                        <div class="badge bg-warning">{{ (dup.score * 100)|int }}% match</div>
+                        <div class="badge {% if dup.score == 1.0 %}bg-danger{% else %}bg-warning{% endif %}">
+                            {{ (dup.score * 100)|int }}% match
+                        </div>
                     </div>
                     <div class="col-md-5">
                         <h6>Transaction 2</h6>
@@ -80,6 +87,31 @@ function markDuplicate(transId, duplicateOfId) {
         } else {
             alert('Error: ' + data.error);
         }
+    });
+}
+
+function autoMarkExactDuplicates() {
+    if (!confirm('Automatically mark all 100% duplicate transactions?\n\nThis will keep the first occurrence of each duplicate transaction and mark subsequent ones as duplicates.')) {
+        return;
+    }
+
+    fetch('{{ url_for("auto_mark_all_duplicates") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Successfully marked ${data.count} exact duplicate${data.count !== 1 ? 's' : ''}`);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
     });
 }
 </script>

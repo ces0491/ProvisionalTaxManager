@@ -4,7 +4,7 @@ Tests for tax_calculator module
 from decimal import Decimal
 from datetime import date
 
-from tax_calculator import (
+from src.services.tax_calculator import (
     SATaxCalculator,
     calculate_tax_from_transactions
 )

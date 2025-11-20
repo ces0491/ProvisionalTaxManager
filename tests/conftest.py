@@ -11,8 +11,8 @@ from decimal import Decimal
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import app as flask_app
-from models import db, Account, Statement, Category, Transaction, ExpenseRule
-from config import Config
+from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule
+from src.config import Config
 
 
 class TestConfig(Config):

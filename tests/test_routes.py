@@ -84,7 +84,7 @@ class TestTransactionRoutes:
 
     def test_edit_transaction_get(self, authenticated_client, db_session):
         """Test edit transaction form loads"""
-        from models import Transaction
+        from src.database.models import Transaction
 
         trans = Transaction.query.first()
         if trans:
@@ -93,7 +93,7 @@ class TestTransactionRoutes:
 
     def test_delete_transaction(self, authenticated_client, db_session):
         """Test deleting a transaction"""
-        from models import Transaction
+        from src.database.models import Transaction
 
         trans = Transaction.query.first()
         if trans:
@@ -109,7 +109,7 @@ class TestTransactionRoutes:
 
     def test_split_transaction_get(self, authenticated_client, db_session):
         """Test split transaction form loads"""
-        from models import Transaction
+        from src.database.models import Transaction
 
         trans = Transaction.query.first()
         if trans:
@@ -171,7 +171,7 @@ class TestIncomeSourcesRoutes:
 
     def test_add_income_source(self, authenticated_client, db_session):
         """Test adding an income source pattern"""
-        from models import Category
+        from src.database.models import Category
 
         income_cat = Category.query.filter_by(name='Income').first()
 
@@ -191,7 +191,7 @@ class TestIncomeSourcesRoutes:
 
     def test_toggle_income_source(self, authenticated_client, db_session):
         """Test toggling income source active status"""
-        from models import ExpenseRule
+        from src.database.models import ExpenseRule
 
         rule = ExpenseRule.query.first()
         if rule:
@@ -208,7 +208,7 @@ class TestIncomeSourcesRoutes:
 
     def test_delete_income_source(self, authenticated_client, db_session):
         """Test deleting an income source pattern"""
-        from models import ExpenseRule, Category
+        from src.database.models import ExpenseRule, Category
 
         # Create a test rule to delete
         income_cat = Category.query.filter_by(name='Income').first()
@@ -245,7 +245,7 @@ class TestDuplicatesRoutes:
 
     def test_mark_duplicate_api(self, authenticated_client, db_session):
         """Test marking a transaction as duplicate"""
-        from models import Transaction
+        from src.database.models import Transaction
 
         # Get two transactions
         trans = Transaction.query.limit(2).all()

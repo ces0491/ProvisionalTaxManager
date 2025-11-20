@@ -5,7 +5,7 @@ import pytest
 from datetime import date
 from decimal import Decimal
 
-from models import Account, Statement, Category, Transaction, ExpenseRule
+from src.database.models import Account, Statement, Category, Transaction, ExpenseRule
 
 
 class TestCategory:
@@ -104,7 +104,7 @@ class TestStatement:
 
     def test_statement_relationship_with_transactions(self, db_session):
         """Test statement-transaction relationship"""
-        from models import Transaction
+        from src.database.models import Transaction
 
         statement = Statement.query.first()
         initial_count = len(statement.transactions)

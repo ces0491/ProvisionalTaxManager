@@ -24,7 +24,10 @@ class BankStatementParser:
             if 'SIGNATURE' in first_page_text_upper or 'CHEQUE' in first_page_text_upper:
                 self.account_type = 'cheques'
                 return self._parse_cheques_account(pdf)
-            elif 'CREDIT CARD' in first_page_text_upper:
+            elif ('CREDIT CARD' in first_page_text_upper or
+                  'CARD DIVISION' in first_page_text_upper or
+                  'WORLD CITIZEN CARD' in first_page_text_upper or
+                  ('CARD' in first_page_text_upper and 'ACCOUNT 5520' in first_page_text_upper)):
                 self.account_type = 'credit_card'
                 return self._parse_credit_card(pdf)
             elif 'HOUSING LOAN' in first_page_text_upper or 'HOME LOAN' in first_page_text_upper:
@@ -254,28 +257,91 @@ class BankStatementParser:
                 acc_match = re.search(r'Account number:\s*([\d\*\s]+)', text)
                 if acc_match:
                     self.account_number = acc_match.group(1).replace(' ', '')
+                else:
+                    # Try pattern like "Account: Credit Card 5520-xxxx-xxxx-9115"
+                    acc_match = re.search(r'Account:\s*Credit Card\s*([\d\-x]+)', text)
+                    if acc_match:
+                        self.account_number = acc_match.group(1).replace('-', '').replace('x', '*')
+                    else:
+                        # Try pattern like "Account 5520 **** **** 7880"
+                        acc_match = re.search(r'Account\s+(5520\s*[\*\d]+\s*[\*\d]+\s*[\*\d]+)', text)
+                        if acc_match:
+                            self.account_number = acc_match.group(1).replace(' ', '')
 
             # Extract date range
             if not self.start_date:
-                date_match = re.search(r'From:\s*(\d+\s+\w+\s+\d+).*?To:\s*(\d+\s+\w+\s+\d+)', text, re.DOTALL)
+                # Try "Transaction date range: DD Month YYYY - DD Month YYYY" format
+                date_match = re.search(r'Transaction date range:\s*(\d+\s+\w+\s+\d+)\s*-\s*(\d+\s+\w+\s+\d+)', text)
                 if date_match:
                     self.start_date = self._parse_date(date_match.group(1))
                     self.end_date = self._parse_date(date_match.group(2))
+                else:
+                    # Try "Statement Period DD Mon YY to DD Mon YY" format
+                    date_match = re.search(r'Statement Period\s+(\d+\s+\w+\s+\d+)\s+to\s+(\d+\s+\w+\s+\d+)', text)
+                    if date_match:
+                        self.start_date = self._parse_date(date_match.group(1))
+                        self.end_date = self._parse_date(date_match.group(2))
+                    else:
+                        # Try "From: ... To: ..." format
+                        date_match = re.search(r'From:\s*(\d+\s+\w+\s+\d+).*?To:\s*(\d+\s+\w+\s+\d+)', text, re.DOTALL)
+                        if date_match:
+                            self.start_date = self._parse_date(date_match.group(1))
+                            self.end_date = self._parse_date(date_match.group(2))
 
             # Extract transactions
             lines = text.split('\n')
-            for i, line in enumerate(lines):
-                date_match = re.match(r'^(\d{1,2}\s+\w{3}\s+\d{2})\s+(.+)', line)
+            i = 0
+            # Track current year context
+            current_year = None
+            while i < len(lines):
+                line = lines[i]
+
+                # Check if this line is a year marker (e.g., "2024" or "2025")
+                if re.match(r'^\d{4}$', line.strip()):
+                    year_str = line.strip()
+                    current_year = year_str[-2:]  # Get last 2 digits
+                    i += 1
+                    continue
+
+                # Look for date pattern at start of line (e.g., "01 Apr" or "01 Apr 25")
+                date_match = re.match(r'^(\d{1,2}\s+\w{3})(?:\s+\d{2})?\s+(.+)', line)
                 if date_match:
                     date_str = date_match.group(1)
                     rest = date_match.group(2)
 
-                    transaction = self._parse_transaction_line(date_str, rest)
+                    # If year is in the date string, use it; otherwise use context year
+                    full_date_match = re.match(r'^(\d{1,2}\s+\w{3}\s+\d{2})', line)
+                    if full_date_match:
+                        full_date_str = full_date_match.group(1)
+                    else:
+                        # Use current_year if available, otherwise extract from statement dates
+                        if current_year:
+                            full_date_str = f"{date_str} {current_year}"
+                        elif self.start_date:
+                            # Use year from start_date
+                            year = str(self.start_date.year)[-2:]
+                            full_date_str = f"{date_str} {year}"
+                        else:
+                            full_date_str = f"{date_str} 25"  # fallback
+
+                    # Check if description is on the next line
+                    # If rest only contains amounts (no alphabetic description), check next line
+                    rest_has_description = any(c.isalpha() for c in rest)
+                    if not rest_has_description and i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        # Make sure next line isn't another transaction line
+                        if next_line and not re.match(r'^\d{1,2}\s+\w{3}', next_line):
+                            rest = next_line + ' ' + rest
+                            i += 1  # Skip the next line since we consumed it
+
+                    transaction = self._parse_transaction_line(full_date_str, rest)
                     if transaction:
                         # Credit card transactions are typically expenses (negative)
                         if transaction['amount'] > 0:
                             transaction['amount'] = -transaction['amount']
                         transactions.append(transaction)
+
+                i += 1
 
         self.transactions = transactions
         return {
@@ -298,13 +364,36 @@ class BankStatementParser:
                 acc_match = re.search(r'Account number:\s*([\d\*\s]+)', text)
                 if acc_match:
                     self.account_number = acc_match.group(1).replace(' ', '')
+                else:
+                    # Try pattern like "Account: Credit Card 5520-xxxx-xxxx-9115"
+                    acc_match = re.search(r'Account:\s*Credit Card\s*([\d\-x]+)', text)
+                    if acc_match:
+                        self.account_number = acc_match.group(1).replace('-', '').replace('x', '*')
+                    else:
+                        # Try pattern like "Account 5520 **** **** 7880"
+                        acc_match = re.search(r'Account\s+(5520\s*[\*\d]+\s*[\*\d]+\s*[\*\d]+)', text)
+                        if acc_match:
+                            self.account_number = acc_match.group(1).replace(' ', '')
 
             # Extract date range
             if not self.start_date:
-                date_match = re.search(r'From:\s*(\d+\s+\w+\s+\d+).*?To:\s*(\d+\s+\w+\s+\d+)', text, re.DOTALL)
+                # Try "Transaction date range: DD Month YYYY - DD Month YYYY" format
+                date_match = re.search(r'Transaction date range:\s*(\d+\s+\w+\s+\d+)\s*-\s*(\d+\s+\w+\s+\d+)', text)
                 if date_match:
                     self.start_date = self._parse_date(date_match.group(1))
                     self.end_date = self._parse_date(date_match.group(2))
+                else:
+                    # Try "Statement Period DD Mon YY to DD Mon YY" format
+                    date_match = re.search(r'Statement Period\s+(\d+\s+\w+\s+\d+)\s+to\s+(\d+\s+\w+\s+\d+)', text)
+                    if date_match:
+                        self.start_date = self._parse_date(date_match.group(1))
+                        self.end_date = self._parse_date(date_match.group(2))
+                    else:
+                        # Try "From: ... To: ..." format
+                        date_match = re.search(r'From:\s*(\d+\s+\w+\s+\d+).*?To:\s*(\d+\s+\w+\s+\d+)', text, re.DOTALL)
+                        if date_match:
+                            self.start_date = self._parse_date(date_match.group(1))
+                            self.end_date = self._parse_date(date_match.group(2))
 
             # Extract transactions from table
             lines = text.split('\n')

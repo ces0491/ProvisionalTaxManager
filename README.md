@@ -208,74 +208,6 @@ The generated Excel file contains 11 tables as per requirements:
 
 Format: `PnLMarAugforAug2025.xlsx` or `PnLSepFebforFeb2026.xlsx`
 
-## Business Rules
-
-### Income
-
-- **PRECISE DIGITAL** (NZ payments) - Gross amounts
-- Teletransmission fees are expenses, not income deductions
-- Inter-account transfers excluded
-
-### Business Expenses (Deductible)
-
-- Technology/Software: Google Workspace, Claude.AI, Render, GoDaddy, etc.
-- Internet: Afrihost (100%)
-- Phone/Data: MTN, data bundles
-- Medical: Discovery Medical Aid, consultations, Specsavers, Clicks
-- Retirement: 10X, Old Mutual
-- Education: UCT, Qualifyd
-- Property: **Full** mortgage interest + insurance (not 8.2%)
-- Municipal: City of Cape Town
-- Maintenance: Garden, irrigation, electrical, building, fencing
-- Professional: SARS payments, tax practitioner
-- Coffee/Meals: Bootleggers, Shift, Foresters, Bossa, Yoco locations
-- Banking fees: All fees and charges
-
-### Personal Expenses (Non-Deductible)
-
-- Entertainment: Netflix, YouTube, Apple, PlayStation, SABC
-- Gym: Virgin Active, OM Gym
-- Alcohol: Wine purchases
-- Recreation: Sports equipment
-
-### Special Handling
-
-- **Takealot orders**: Flag for manual splitting of business/personal items
-- **Mortgage statement**: Extract full interest + insurance with month-end dates
-- **Municipal**: Use actual payment date (not service period)
-
-## File Structure
-
-```text
-sa-tax-app/
-├── app.py                 # Main Flask application
-├── models.py              # Database models
-├── config.py              # Configuration
-├── pdf_parser.py          # PDF parsing logic
-├── categorizer.py         # Transaction categorization rules
-├── excel_export.py        # Excel report generation
-├── requirements.txt       # Python dependencies
-├── Procfile              # Render deployment
-├── render.yaml           # Render configuration
-├── templates/            # HTML templates
-│   ├── base.html
-│   ├── index.html
-│   ├── login.html
-│   ├── upload.html
-│   ├── transactions.html
-│   ├── edit_transaction.html
-│   └── duplicates.html
-└── uploads/              # Uploaded PDF files (not in git)
-```
-
-## Security
-
-- Password-protected with configurable password
-- Session-based authentication
-- File upload size limited to 16MB
-- Only PDF files accepted
-- Soft deletion of transactions (recoverable)
-
 ## Testing
 
 The application includes a comprehensive test suite with 79 tests covering:
@@ -293,22 +225,3 @@ pytest
 ```
 
 For detailed test documentation, see [tests/README.md](tests/README.md)
-
-### Current Test Status
-
-**All tests passing: 79/79 (100%)**
-
-- Tax Calculator: 12/12 passing (100%)
-- Categorizer: 20/20 passing (100%)
-- PDF Parser: 7/7 passing (100%)
-- Routes: 26/26 passing (100%)
-- Models: 18/18 passing (100%)
-
-## Support
-
-For issues or questions, refer to the requirements document:
-`provisional_tax_calc_system.md`
-
-## License
-
-Private use only - Sheet Solved

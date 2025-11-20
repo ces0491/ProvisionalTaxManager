@@ -3,14 +3,14 @@ from functools import wraps
 import os
 from werkzeug.utils import secure_filename
 from datetime import datetime
-
-from config import Config
-from models import db, Account, Statement, Category, Transaction, ExpenseRule
-from pdf_parser import BankStatementParser, detect_duplicates
-from categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
-from excel_export import generate_tax_export
-from tax_calculator import calculate_tax_from_transactions
 from decimal import Decimal
+
+from src.config import Config
+from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule
+from src.services.pdf_parser import BankStatementParser, detect_duplicates
+from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
+from src.services.excel_export import generate_tax_export
+from src.services.tax_calculator import calculate_tax_from_transactions
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -69,6 +69,41 @@ def index():
                          statements=statements,
                          total_transactions=total_transactions,
                          uncategorized=uncategorized)
+
+
+def auto_mark_duplicates():
+    """
+    Automatically mark 100% duplicate transactions
+    Returns count of duplicates marked
+    """
+    # Get all non-deleted, non-duplicate transactions
+    all_transactions = Transaction.query.filter_by(is_deleted=False, is_duplicate=False).all()
+
+    trans_list = [{
+        'id': t.id,
+        'date': t.date,
+        'description': t.description,
+        'amount': float(t.amount)
+    } for t in all_transactions]
+
+    duplicate_pairs = detect_duplicates(trans_list)
+
+    # Auto-mark only 100% matches (score == 1.0)
+    marked_count = 0
+    for idx1, idx2, score in duplicate_pairs:
+        if score == 1.0:  # Only exact matches
+            trans1 = all_transactions[idx1]
+            trans2 = all_transactions[idx2]
+
+            # Mark the second one as duplicate (keep the first)
+            trans2.is_duplicate = True
+            trans2.duplicate_of_id = trans1.id
+            marked_count += 1
+
+    if marked_count > 0:
+        db.session.commit()
+
+    return marked_count
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -150,7 +185,14 @@ def upload():
                         db.session.add(transaction)
 
                     db.session.commit()
-                    flash(f'Successfully uploaded and parsed {filename}', 'success')
+
+                    # Auto-mark 100% duplicates
+                    auto_marked = auto_mark_duplicates()
+
+                    success_msg = f'Successfully uploaded and parsed {filename}'
+                    if auto_marked > 0:
+                        success_msg += f' ({auto_marked} duplicate{"s" if auto_marked != 1 else ""} auto-marked)'
+                    flash(success_msg, 'success')
 
                 except Exception as e:
                     db.session.rollback()
@@ -420,6 +462,17 @@ def mark_duplicate():
         return jsonify({'success': True})
 
     return jsonify({'success': False, 'error': 'Transaction not found'}), 404
+
+
+@app.route('/api/auto_mark_duplicates', methods=['POST'])
+@login_required
+def auto_mark_all_duplicates():
+    """Automatically mark all 100% duplicate transactions"""
+    try:
+        count = auto_mark_duplicates()
+        return jsonify({'success': True, 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/tax_calculator')

@@ -1,7 +1,7 @@
 """
 Tests for categorizer module
 """
-from categorizer import (
+from src.services.categorizer import (
     categorize_transaction,
     categorize_transaction_with_rules,
     is_inter_account_transfer,
@@ -111,7 +111,7 @@ class TestCategorizeTransactionWithRules:
 
     def test_categorize_with_rules(self, db_session):
         """Test categorization uses database rules"""
-        from models import ExpenseRule, Category
+        from src.database.models import ExpenseRule, Category
 
         # Get a category
         income_cat = Category.query.filter_by(name='Income').first()
@@ -142,7 +142,7 @@ class TestCategorizeTransactionWithRules:
 
     def test_categorize_with_regex_rule(self, db_session):
         """Test categorization with regex pattern"""
-        from models import ExpenseRule, Category
+        from src.database.models import ExpenseRule, Category
 
         tech_cat = Category.query.filter_by(name='Technology/Software').first()
 
@@ -176,7 +176,7 @@ class TestCategorizeTransactionWithRules:
 
     def test_categorize_priority_order(self, db_session):
         """Test that higher priority rules are matched first"""
-        from models import ExpenseRule, Category
+        from src.database.models import ExpenseRule, Category
 
         income_cat = Category.query.filter_by(name='Income').first()
         tech_cat = Category.query.filter_by(name='Technology/Software').first()
@@ -212,7 +212,7 @@ class TestCategorizeTransactionWithRules:
 
     def test_categorize_inactive_rules_ignored(self, db_session):
         """Test that inactive rules are not matched"""
-        from models import ExpenseRule, Category
+        from src.database.models import ExpenseRule, Category
 
         income_cat = Category.query.filter_by(name='Income').first()
 
@@ -276,7 +276,7 @@ class TestGetCategoryByName:
 
     def test_get_category_by_name(self, db_session):
         """Test getting category by name"""
-        from models import Category
+        from src.database.models import Category
 
         category = get_category_by_name(db_session, Category, 'Income')
         assert category is not None
@@ -285,7 +285,7 @@ class TestGetCategoryByName:
 
     def test_get_category_by_name_not_found(self, db_session):
         """Test getting non-existent category"""
-        from models import Category
+        from src.database.models import Category
 
         category = get_category_by_name(db_session, Category, 'NonExistent')
         assert category is None

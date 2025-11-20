@@ -1,9 +1,94 @@
+# Byte-compiled / optimized / DLL files
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
+*.so
+*.dll
+
+# Virtual environments
 venv/
+env/
+ENV/
+.venv
+
+# Environment variables
 .env
+.env.local
+
+# Database files
 *.db
+*.sqlite
+*.sqlite3
+data/
+
+# Uploaded files
 uploads/
 *.pdf
+
+# Excel exports
+*.xlsx
+*.xls
+
+# Log files
+*.log
+
+# Flask instance folder
+instance/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Claude Code
 .claude
