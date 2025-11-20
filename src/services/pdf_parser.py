@@ -619,12 +619,18 @@ def detect_duplicates(transactions_list):
                 # Same amount
                 if trans1['amount'] == trans2['amount']:
                     # Similar description (allow for minor differences)
-                    desc1 = trans1['description'].upper()
-                    desc2 = trans2['description'].upper()
+                    desc1 = trans1['description'].upper().strip()
+                    desc2 = trans2['description'].upper().strip()
 
                     if desc1 == desc2:
                         duplicates.append((i, j, 1.0))  # Exact match
                     elif desc1 in desc2 or desc2 in desc1:
-                        duplicates.append((i, j, 0.8))  # Partial match
+                        # If one description is very short (< 10 chars) or empty,
+                        # and it's contained in the other, treat as exact match
+                        # This handles cases where PDF parsing extracts different amounts of text
+                        if len(desc1) < 10 or len(desc2) < 10:
+                            duplicates.append((i, j, 1.0))  # Exact match
+                        else:
+                            duplicates.append((i, j, 0.8))  # Partial match
 
     return duplicates

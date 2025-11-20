@@ -164,7 +164,7 @@ def upload():
                         category = None
                         if cat_key:
                             cat_name = None
-                            from categorizer import CATEGORIES
+                            from src.services.categorizer import CATEGORIES
                             if cat_key in CATEGORIES:
                                 cat_name = CATEGORIES[cat_key]['name']
                                 category = get_category_by_name(db, Category, cat_name)
@@ -420,8 +420,8 @@ def export():
 @login_required
 def duplicates():
     """View potential duplicate transactions"""
-    # Find duplicates
-    all_transactions = Transaction.query.filter_by(is_deleted=False).all()
+    # Find duplicates - only among active (non-duplicate) transactions
+    all_transactions = Transaction.query.filter_by(is_deleted=False, is_duplicate=False).all()
 
     trans_list = [{
         'id': t.id,
