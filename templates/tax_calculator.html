@@ -59,6 +59,31 @@
                             </small>
                         </div>
 
+                        <hr>
+                        <h6 class="text-muted mb-3">
+                            <i class="bi bi-house-door"></i> Home Office Apportionment
+                        </h6>
+
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label for="homeOfficeSqm" class="form-label">Office (m²)</label>
+                                    <input type="number" class="form-control" id="homeOfficeSqm"
+                                           value="22" min="0" step="0.1">
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label for="houseTotalSqm" class="form-label">House (m²)</label>
+                                    <input type="number" class="form-control" id="houseTotalSqm"
+                                           value="268" min="0" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mb-3">
+                            <span id="homeOfficePercentage">8.2</span>% of home expenses are deductible
+                        </small>
+
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="bi bi-calculator"></i> Calculate Tax
                         </button>
@@ -208,14 +233,131 @@
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="card-header">
+                <!-- Transaction Summary Card -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
                         <h6 class="mb-0">
-                            <i class="bi bi-pie-chart"></i> Expense Breakdown
+                            <i class="bi bi-list-check"></i> Transaction Summary
+                            <small class="float-end">Tax Year: <span id="taxYear"></span></small>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col">
+                                <div class="border rounded p-2 bg-light">
+                                    <small class="text-muted d-block">Income</small>
+                                    <strong class="text-success" id="incomeCount">0</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="border rounded p-2 bg-light">
+                                    <small class="text-muted d-block">Business</small>
+                                    <strong class="text-primary" id="businessCount">0</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="border rounded p-2 bg-light">
+                                    <small class="text-muted d-block">Personal</small>
+                                    <strong class="text-secondary" id="personalCount">0</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="border rounded p-2 bg-light">
+                                    <small class="text-muted d-block">Excluded</small>
+                                    <strong class="text-muted" id="excludedCount">0</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="border rounded p-2 bg-light">
+                                    <small class="text-muted d-block">Total</small>
+                                    <strong id="totalCount">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Income</strong> and <strong>Business Expenses</strong> are used in tax calculation.
+                                Personal expenses and excluded items are not tax-deductible.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Income Breakdown -->
+                <div class="card mb-4" id="incomeBreakdownCard">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-arrow-down-circle"></i> Income Breakdown
+                            <span class="badge bg-light text-success float-end" id="incomeTotalBadge">R 0.00</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="incomeBreakdown"></div>
+                    </div>
+                </div>
+
+                <!-- Business Expense Breakdown -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-briefcase"></i> Business Expenses (Tax Deductible)
+                            <span class="badge bg-light text-primary float-end" id="expenseTotalBadge">R 0.00</span>
                         </h6>
                     </div>
                     <div class="card-body">
                         <div id="expenseBreakdown"></div>
+                    </div>
+                </div>
+
+                <!-- Personal Expenses (Not Deductible) -->
+                <div class="card mb-4" id="personalBreakdownCard">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-person"></i> Personal Expenses (Not Deductible)
+                            <span class="badge bg-light text-secondary float-end" id="personalTotalBadge">R 0.00</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="personalBreakdown"></div>
+                    </div>
+                </div>
+
+                <!-- Excluded Transactions -->
+                <div class="card mb-4" id="excludedBreakdownCard">
+                    <div class="card-header bg-dark text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-x-circle"></i> Excluded (Not Counted)
+                            <span class="badge bg-light text-dark float-end" id="excludedTotalBadge">R 0.00</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="excludedBreakdown"></div>
+                    </div>
+                </div>
+
+                <!-- Home Office Apportionment Details -->
+                <div class="card mb-4" id="apportionmentCard">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0">
+                            <i class="bi bi-house-door"></i> Home Office Apportionment
+                            <span class="badge bg-dark text-warning float-end" id="apportionmentPercentBadge">0%</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-2">
+                            <strong>Office:</strong> <span id="apportionmentOfficeSqm">0</span>m² |
+                            <strong>House:</strong> <span id="apportionmentHouseSqm">0</span>m² |
+                            <strong>Deductible:</strong> <span id="apportionmentPercentage">0</span>%
+                        </p>
+                        <p class="small text-muted mb-3">
+                            The following home-related expenses are reduced to <span id="apportionmentPercentage2">0</span>% of their full value:
+                        </p>
+                        <div id="apportionmentBreakdown"></div>
+                        <div class="alert alert-warning mt-3 mb-0 small" id="apportionmentSavingsAlert">
+                            <strong>Total reduction:</strong> R <span id="apportionmentReduction">0.00</span>
+                            (non-deductible portion of home expenses)
+                        </div>
                     </div>
                 </div>
             </div>
@@ -247,7 +389,9 @@ document.getElementById('taxForm').addEventListener('submit', async (e) => {
         end_date: document.getElementById('endDate').value,
         age: document.getElementById('age').value,
         medical_aid_members: document.getElementById('medicalAid').value,
-        previous_payments: document.getElementById('previousPayments').value
+        previous_payments: document.getElementById('previousPayments').value,
+        home_office_sqm: document.getElementById('homeOfficeSqm').value,
+        house_total_sqm: document.getElementById('houseTotalSqm').value
     };
 
     try {
@@ -299,22 +443,94 @@ function displayResults(calc, transCount) {
     document.getElementById('provisionalPayment').textContent =
         formatCurrency(calc.provisional_payment);
 
-    // Expense breakdown
-    displayExpenseBreakdown(calc.expense_breakdown);
+    // Tax year
+    document.getElementById('taxYear').textContent = calc.tax_year + '/' + (calc.tax_year + 1);
+
+    // Transaction counts
+    const counts = calc.transaction_counts;
+    document.getElementById('incomeCount').textContent = counts.income;
+    document.getElementById('businessCount').textContent = counts.business_expense;
+    document.getElementById('personalCount').textContent = counts.personal_expense;
+    document.getElementById('excludedCount').textContent = counts.excluded;
+    document.getElementById('totalCount').textContent = counts.total;
+
+    // Income breakdown
+    displayBreakdown('incomeBreakdown', calc.income_breakdown, 'No income transactions found.');
+    document.getElementById('incomeTotalBadge').textContent = 'R ' + formatCurrency(calc.period_income);
+    toggleCard('incomeBreakdownCard', Object.keys(calc.income_breakdown).length > 0);
+
+    // Business expense breakdown
+    displayBreakdown('expenseBreakdown', calc.expense_breakdown, 'No business expenses found.');
+    document.getElementById('expenseTotalBadge').textContent = 'R ' + formatCurrency(calc.period_expenses);
+
+    // Personal expense breakdown
+    displayBreakdown('personalBreakdown', calc.personal_breakdown, 'No personal expenses found.');
+    document.getElementById('personalTotalBadge').textContent = 'R ' + formatCurrency(calc.total_personal_expenses);
+    toggleCard('personalBreakdownCard', Object.keys(calc.personal_breakdown).length > 0);
+
+    // Excluded breakdown
+    displayBreakdown('excludedBreakdown', calc.excluded_breakdown, 'No excluded transactions found.');
+    document.getElementById('excludedTotalBadge').textContent = 'R ' + formatCurrency(calc.total_excluded);
+    toggleCard('excludedBreakdownCard', Object.keys(calc.excluded_breakdown).length > 0);
+
+    // Home office apportionment
+    displayApportionment(calc.home_office);
 
     // Show results
     document.getElementById('resultsSection').classList.remove('d-none');
 }
 
-function displayExpenseBreakdown(breakdown) {
-    const container = document.getElementById('expenseBreakdown');
+function displayApportionment(homeOffice) {
+    // Update summary values
+    document.getElementById('apportionmentOfficeSqm').textContent = homeOffice.office_sqm;
+    document.getElementById('apportionmentHouseSqm').textContent = homeOffice.house_sqm;
+    document.getElementById('apportionmentPercentage').textContent = homeOffice.percentage;
+    document.getElementById('apportionmentPercentage2').textContent = homeOffice.percentage;
+    document.getElementById('apportionmentPercentBadge').textContent = homeOffice.percentage + '%';
+    document.getElementById('apportionmentReduction').textContent = formatCurrency(homeOffice.total_reduction);
 
-    if (Object.keys(breakdown).length === 0) {
-        container.innerHTML = '<p class="text-muted">No expense categories found.</p>';
+    // Build apportionment breakdown table
+    const container = document.getElementById('apportionmentBreakdown');
+    const detail = homeOffice.detail;
+
+    if (!detail || Object.keys(detail).length === 0) {
+        container.innerHTML = '<p class="text-muted mb-0">No home-related expenses found in this period.</p>';
+        toggleCard('apportionmentCard', false);
         return;
     }
 
-    let html = '<table class="table table-sm table-striped">';
+    let html = '<table class="table table-sm table-striped mb-0">';
+    html += '<thead><tr><th>Category</th><th class="text-end">Full Amount</th><th class="text-end">Deductible (' + homeOffice.percentage + '%)</th><th class="text-end">Reduction</th></tr></thead>';
+    html += '<tbody>';
+
+    // Sort by full amount descending
+    const sorted = Object.entries(detail).sort((a, b) =>
+        parseFloat(b[1].full) - parseFloat(a[1].full)
+    );
+
+    for (const [category, vals] of sorted) {
+        html += `<tr>
+            <td>${category}</td>
+            <td class="text-end text-muted"><s>R ${formatCurrency(vals.full)}</s></td>
+            <td class="text-end text-success">R ${formatCurrency(vals.apportioned)}</td>
+            <td class="text-end text-danger">-R ${formatCurrency(vals.reduction)}</td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    toggleCard('apportionmentCard', true);
+}
+
+function displayBreakdown(containerId, breakdown, emptyMessage) {
+    const container = document.getElementById(containerId);
+
+    if (!breakdown || Object.keys(breakdown).length === 0) {
+        container.innerHTML = `<p class="text-muted mb-0">${emptyMessage}</p>`;
+        return;
+    }
+
+    let html = '<table class="table table-sm table-striped mb-0">';
     html += '<thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>';
     html += '<tbody>';
 
@@ -332,6 +548,13 @@ function displayExpenseBreakdown(breakdown) {
 
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+function toggleCard(cardId, show) {
+    const card = document.getElementById(cardId);
+    if (card) {
+        card.style.display = show ? 'block' : 'none';
+    }
 }
 
 function formatCurrency(value) {
@@ -355,6 +578,20 @@ window.addEventListener('DOMContentLoaded', () => {
     // Default to current year's first provisional period
     document.getElementById('startDate').value = `${year}-03-01`;
     document.getElementById('endDate').value = `${year}-08-31`;
+
+    // Update home office percentage when values change
+    updateHomeOfficePercentage();
 });
+
+// Update home office percentage display dynamically
+function updateHomeOfficePercentage() {
+    const officeSqm = parseFloat(document.getElementById('homeOfficeSqm').value) || 0;
+    const houseSqm = parseFloat(document.getElementById('houseTotalSqm').value) || 1;
+    const percentage = ((officeSqm / houseSqm) * 100).toFixed(1);
+    document.getElementById('homeOfficePercentage').textContent = percentage;
+}
+
+document.getElementById('homeOfficeSqm').addEventListener('input', updateHomeOfficePercentage);
+document.getElementById('houseTotalSqm').addEventListener('input', updateHomeOfficePercentage);
 </script>
 {% endblock %}

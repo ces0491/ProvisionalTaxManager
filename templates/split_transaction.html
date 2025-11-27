@@ -10,7 +10,7 @@
                 <h1>
                     <i class="bi bi-scissors"></i> Split Transaction
                 </h1>
-                <a href="{{ url_for('transactions') }}" class="btn btn-secondary">
+                <a href="{{ url_for('transactions', category_id=filter_params.category_id or None, start_date=filter_params.start_date or None, end_date=filter_params.end_date or None, page=filter_params.page) }}" class="btn btn-secondary">
                     <i class="bi bi-arrow-left"></i> Back to Transactions
                 </a>
             </div>
@@ -55,6 +55,12 @@
             </div>
 
             <form method="POST">
+                <!-- Hidden fields to preserve filter state -->
+                <input type="hidden" name="filter_category_id" value="{{ filter_params.category_id }}">
+                <input type="hidden" name="filter_start_date" value="{{ filter_params.start_date }}">
+                <input type="hidden" name="filter_end_date" value="{{ filter_params.end_date }}">
+                <input type="hidden" name="filter_page" value="{{ filter_params.page }}">
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="card">
@@ -182,7 +188,7 @@
                     <button type="submit" class="btn btn-primary btn-lg">
                         <i class="bi bi-scissors"></i> Split Transaction
                     </button>
-                    <a href="{{ url_for('transactions') }}" class="btn btn-secondary">
+                    <a href="{{ url_for('transactions', category_id=filter_params.category_id or None, start_date=filter_params.start_date or None, end_date=filter_params.end_date or None, page=filter_params.page) }}" class="btn btn-secondary">
                         Cancel
                     </a>
                 </div>

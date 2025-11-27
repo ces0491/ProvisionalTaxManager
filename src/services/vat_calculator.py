@@ -32,7 +32,7 @@ def get_vat_rate_for_date(transaction_date: date, rate_type: str = 'standard', d
     # Try to load from database
     if db_session:
         try:
-            from models import VATConfig
+            from src.database.models import VATConfig
 
             # Find the VAT rate effective on this date
             vat_config = VATConfig.query.filter(

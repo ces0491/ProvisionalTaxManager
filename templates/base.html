@@ -18,21 +18,32 @@
         .navbar-brand {
             font-weight: bold;
         }
-        .badge-business {
-            background-color: #28a745;
+        .badge-business-expense {
+            background-color: #28a745 !important;
+            color: white !important;
+            font-weight: 700 !important;
         }
-        .badge-personal {
-            background-color: #ffc107;
+        .badge-personal-expense {
+            background-color: #ffc107 !important;
+            color: #000 !important;
+            font-weight: 700 !important;
         }
         .badge-income {
-            background-color: #007bff;
+            background-color: #007bff !important;
+            color: white !important;
+            font-weight: 700 !important;
+        }
+        .badge-excluded {
+            background-color: #6c757d !important;
+            color: white !important;
+            font-weight: 700 !important;
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     {% if session.logged_in %}
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('index') }}">
                 <i class="bi bi-calculator"></i> SA Tax Manager
@@ -53,6 +64,11 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('duplicates') }}">Duplicates</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('reports') }}">
+                            <i class="bi bi-bar-chart-line"></i> Reports
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('tax_calculator') }}">

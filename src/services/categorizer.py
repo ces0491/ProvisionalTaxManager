@@ -2,6 +2,7 @@
 Transaction categorization engine
 Based on provisional_tax_calc_system.md rules
 """
+import re
 
 # Category definitions
 CATEGORIES = {
@@ -26,7 +27,7 @@ CATEGORIES = {
     'retirement_other': {
         'name': 'Other Retirement',
         'type': 'business_expense',
-        'patterns': ['OLD MUTUAL', 'OLDGM', 'OM UNITTRU'],
+        'patterns': ['OM UNITTRU', 'OLD MUTUAL INVEST', 'OLDGM.*INVEST'],
     },
     'medical_aid': {
         'name': 'Medical Aid',
@@ -77,7 +78,7 @@ CATEGORIES = {
             'POINT GARDEN',
             'LIQUID RAIN', 'JOYCE THINDWA',
             'TRIP ELECTRICAL',
-            'VALIDUS', 'FIREWORX',
+            'FIREWORX',
             'DRAIN UNBLOCK',
             'ABSOLUTE FENCING',
             'CITY OF CAPE TOWN BUILDING', 'CITY BUILDING',
@@ -138,12 +139,62 @@ CATEGORIES = {
         'type': 'business_expense',
         'patterns': ['ROZPRINT'],
     },
+    'advertising_marketing': {
+        'name': 'Advertising/Marketing',
+        'type': 'business_expense',
+        'patterns': ['FACEBOOK ADS', 'GOOGLE ADS', 'LINKEDIN', 'MARKETING'],
+    },
+    'legal_fees': {
+        'name': 'Legal Fees',
+        'type': 'business_expense',
+        'patterns': ['ATTORNEY', 'LEGAL', 'LAW FIRM', 'ADVOCATE'],
+    },
+    'entertainment_business': {
+        'name': 'Entertainment (Business)',
+        'type': 'business_expense',
+        'patterns': [],  # Populated via manual categorization or rules
+    },
+    'travel_accommodation': {
+        'name': 'Travel/Accommodation',
+        'type': 'business_expense',
+        'patterns': ['AIRBNB', 'BOOKING.COM', 'HOTELS', 'GUEST HOUSE', 'LODGE'],
+    },
+    'capital_equipment': {
+        'name': 'Capital Equipment',
+        'type': 'business_expense',
+        'patterns': ['APPLE STORE', 'INCREDIBLE CONNECTION', 'COMPUTER', 'LAPTOP'],
+    },
+    'uniforms_workwear': {
+        'name': 'Uniforms/Workwear',
+        'type': 'business_expense',
+        'patterns': [],  # Populated via manual categorization
+    },
+    'cleaning': {
+        'name': 'Cleaning',
+        'type': 'business_expense',
+        'patterns': ['CLEANING SERVICE', 'DOMESTIC'],
+    },
+    'startup_costs': {
+        'name': 'Business Start-up Costs',
+        'type': 'business_expense',
+        'patterns': ['CIPC', 'COMPANY REGISTRATION'],
+    },
 
     # PERSONAL EXPENSES (Non-deductible)
     'vehicle': {
         'name': 'Vehicle/Transport',
         'type': 'personal_expense',
-        'patterns': ['CARTRACK', 'ENGEN', 'C\\*BP PINELAND', 'ACSA', 'UBER', 'KARRI MAIN'],
+        'patterns': ['CARTRACK', 'ENGEN', 'C\\*BP PINELAND', 'ACSA', 'UBER', 'SBSAVAFNO.*DEBICHECK'],
+    },
+    'kids_school': {
+        'name': 'Kids School',
+        'type': 'personal_expense',
+        'patterns': ['KARRI'],
+    },
+    'home_construction': {
+        'name': 'Home Construction/Renovation',
+        'type': 'personal_expense',
+        'patterns': ['VALIDUS'],
     },
     'groceries': {
         'name': 'Groceries/Personal Shopping',
@@ -156,6 +207,7 @@ CATEGORIES = {
             'CONSTANTIA UI', 'PNP CRP', 'BUILDERS SUNNI', 'PITKIN CYCLES',
             'PETWORLD', 'ABSOLUTE PETS', 'FREEDOM ADVEN', 'BARGAIN BOO',
             'CLICKS', 'SPECSAVERS', 'BWH CITY', 'THE CRAZY S',
+            'ASARA WINES', 'WINE', 'LIQUOR',
         ],
     },
     'personal_other': {
@@ -167,8 +219,8 @@ CATEGORIES = {
             'KM FACTORY',
         ],
     },
-    'entertainment': {
-        'name': 'Entertainment',
+    'entertainment_personal': {
+        'name': 'Entertainment (Personal)',
         'type': 'personal_expense',
         'patterns': [
             'NETFLIX',
@@ -181,12 +233,7 @@ CATEGORIES = {
     'gym': {
         'name': 'Gym',
         'type': 'personal_expense',
-        'patterns': ['VIRGIN ACT', 'O M GYM', 'OM GYM'],
-    },
-    'alcohol': {
-        'name': 'Alcohol',
-        'type': 'personal_expense',
-        'patterns': ['ASARA WINES', 'WINE'],
+        'patterns': ['VIRGIN ACT', 'O M GYM', 'OM GYM', 'OLDGM.*DEBIT TRANSFER', 'OLD MUTUAL.*GYM'],
     },
     'recreation': {
         'name': 'Recreation Equipment',
@@ -208,98 +255,39 @@ CATEGORIES = {
 }
 
 
-def categorize_transaction(description, amount):
+def _is_fee_not_income(description_upper):
+    """Check if this is a teletransmission fee (not income)"""
+    return 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper
+
+
+def _match_pattern(pattern, description_upper, is_regex=True):
+    """Match a pattern against description"""
+    if is_regex:
+        try:
+            return bool(re.search(pattern, description_upper))
+        except re.error:
+            return False
+    return pattern in description_upper
+
+
+def categorize_transaction(description, amount=None, db_rules=None):
     """
-    Categorize a transaction based on description
-    Returns (category_key, confidence_score)
-    """
-    description_upper = description.upper()
+    Categorize a transaction based on description and optional database rules.
 
-    # Special case: Income (PRECISE DIGITAL and other income sources)
-    # Check for known income patterns
-    income_patterns = [
-        'PRECISE DIGITAL',
-        'PRECISE DIGITA',
-        # Additional patterns will be added via database rules
-    ]
-
-    for pattern in income_patterns:
-        if pattern in description_upper:
-            # If it's a teletransmission FEE, it's a business expense
-            if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
-                return ('banking_fees', 1.0)
-            # Otherwise it's income
-            return ('income', 1.0)
-
-    # Check each category
-    import re
-    matches = []
-
-    for cat_key, cat_info in CATEGORIES.items():
-        if cat_info['type'] == 'income':
-            continue  # Already handled above
-
-        for pattern in cat_info['patterns']:
-            # Use regex matching
-            if re.search(pattern, description_upper):
-                matches.append((cat_key, 1.0))
-                break
-
-    if matches:
-        # Return first match (you could implement priority logic here)
-        return matches[0]
-
-    # Default: uncategorized
-    return (None, 0.0)
-
-
-def is_inter_account_transfer(description):
-    """Check if transaction is an inter-account transfer (should be excluded from income)"""
-    transfer_patterns = [
-        'IB TRANSFER TO',
-        'IB TRANSFER FROM',
-        'IB Transfer to',
-        'FUND TRANSFERS',
-        'AUTOBANK TRANSFER',
-    ]
-
-    description_upper = description.upper()
-    for pattern in transfer_patterns:
-        if pattern.upper() in description_upper:
-            return True
-    return False
-
-
-def is_personal_from_business_mixed(description):
-    """
-    Check if this is a mixed business/personal purchase that needs splitting
-    Currently only handles Takealot, but can be extended
-    """
-    if 'TAKEALO' in description.upper() or 'TAKEALOT' in description.upper():
-        # Return True to flag for manual review
-        # In the UI, user can split these
-        return True
-    return False
-
-
-def categorize_transaction_with_rules(description, amount, db_rules=None):
-    """
-    Enhanced categorization using database rules
+    Database rules take priority over hardcoded patterns.
 
     Args:
         description: Transaction description
-        amount: Transaction amount
+        amount: Transaction amount (optional, for future use)
         db_rules: List of ExpenseRule objects from database (optional)
 
     Returns:
-        (category_name, confidence_score)
+        (category_name, confidence_score) tuple
     """
     description_upper = description.upper()
-    import re
 
-    # If database rules provided, check them first (higher priority)
+    # Check database rules first (higher priority)
     if db_rules:
-        # Sort by priority (higher first)
         sorted_rules = sorted(db_rules, key=lambda r: r.priority, reverse=True)
 
         for rule in sorted_rules:
@@ -308,48 +296,71 @@ def categorize_transaction_with_rules(description, amount, db_rules=None):
 
             pattern = rule.pattern.upper()
 
-            # Check if pattern matches
-            if rule.is_regex:
-                try:
-                    if re.search(pattern, description_upper):
-                        # Special handling for income with fees
-                        if rule.category.category_type == 'income':
-                            if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
-                                # This is a fee, not income
-                                continue
-                        return (rule.category.name, 1.0)
-                except re.error:
-                    # Invalid regex, skip
+            if _match_pattern(pattern, description_upper, rule.is_regex):
+                # Skip income match if it's actually a fee
+                if rule.category.category_type == 'income' and _is_fee_not_income(description_upper):
                     continue
-            else:
-                # Simple substring match
-                if pattern in description_upper:
-                    # Special handling for income with fees
-                    if rule.category.category_type == 'income':
-                        if 'FEE' in description_upper and 'TELETRANSMISSION' in description_upper:
-                            # This is a fee, not income
-                            continue
-                    return (rule.category.name, 1.0)
+                return (rule.category.name, 1.0)
 
-    # Fall back to hardcoded categorization
-    category_key, score = categorize_transaction(description, amount)
-    if category_key and category_key in CATEGORIES:
-        return (CATEGORIES[category_key]['name'], score)
+    # Check hardcoded income patterns
+    for pattern in CATEGORIES['income']['patterns']:
+        if pattern in description_upper:
+            if _is_fee_not_income(description_upper):
+                return (CATEGORIES['banking_fees']['name'], 1.0)
+            return (CATEGORIES['income']['name'], 1.0)
 
+    # Check all other hardcoded categories
+    for cat_key, cat_info in CATEGORIES.items():
+        if cat_info['type'] == 'income':
+            continue  # Already handled above
+
+        for pattern in cat_info['patterns']:
+            if _match_pattern(pattern, description_upper):
+                return (cat_info['name'], 1.0)
+
+    # No match found
     return (None, 0.0)
+
+
+# Legacy alias for backward compatibility
+def categorize_transaction_with_rules(description, amount, db_rules=None):
+    """
+    Legacy wrapper - use categorize_transaction instead.
+    """
+    return categorize_transaction(description, amount, db_rules)
+
+
+def is_inter_account_transfer(description):
+    """Check if transaction is an inter-account transfer (should be excluded from income)"""
+    transfer_patterns = [
+        'IB TRANSFER TO',
+        'IB TRANSFER FROM',
+        'FUND TRANSFERS',
+        'AUTOBANK TRANSFER',
+    ]
+    description_upper = description.upper()
+    return any(p in description_upper for p in transfer_patterns)
+
+
+def is_personal_from_business_mixed(description):
+    """
+    Check if this is a mixed business/personal purchase that needs splitting.
+    Currently only handles Takealot, but can be extended.
+    """
+    return 'TAKEALOT' in description.upper() or 'TAKEALO' in description.upper()
 
 
 def init_categories_in_db(db, Category):
     """Initialize categories in the database"""
-    existing = Category.query.count()
-    if existing > 0:
+    if Category.query.count() > 0:
         return  # Already initialized
 
-    for cat_key, cat_info in CATEGORIES.items():
+    for cat_info in CATEGORIES.values():
+        pattern_desc = ', '.join(cat_info['patterns'][:3]) if cat_info['patterns'] else 'Manual only'
         category = Category(
             name=cat_info['name'],
             category_type=cat_info['type'],
-            description=f"Auto-categorized: {', '.join(cat_info['patterns'][:3])}"
+            description=f"Auto-categorized: {pattern_desc}"
         )
         db.session.add(category)
 

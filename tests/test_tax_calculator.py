@@ -184,13 +184,14 @@ class TestCalculateTaxFromTransactions:
         assert result['estimated_annual_tax'] >= 0  # Can be 0 if rebates exceed tax
 
     def test_calculate_tax_excludes_personal(self, sample_transactions):
-        """Test that personal expenses are excluded"""
+        """Test that personal expenses are excluded from business expenses"""
         # Add a personal transaction
         transactions = sample_transactions + [{
             'date': date(2025, 3, 30),
             'description': 'NETFLIX',
             'amount': Decimal('-15.99'),
-            'category': 'Personal'
+            'category': 'Entertainment (Personal)',
+            'category_type': 'personal_expense'
         }]
 
         result = calculate_tax_from_transactions(
@@ -201,8 +202,10 @@ class TestCalculateTaxFromTransactions:
             medical_aid_members=0
         )
 
-        # Personal expense should not be in business expenses
-        assert 'Personal' not in result['expense_breakdown']
+        # Personal expense should not be in business expense breakdown
+        assert 'Entertainment (Personal)' not in result['expense_breakdown']
+        # But should be in personal breakdown
+        assert 'Entertainment (Personal)' in result['personal_breakdown']
 
     def test_calculate_tax_with_no_transactions(self):
         """Test calculation with no transactions"""

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-card {
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .summary-card h3 {
+        margin-bottom: 5px;
+    }
+    .summary-card .amount {
+        font-size: 1.8rem;
+        font-weight: bold;
+    }
+    .income-card {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+    }
+    .income-card .amount {
+        color: #155724;
+    }
+    .expense-card {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+    }
+    .expense-card .amount {
+        color: #721c24;
+    }
+    .profit-card {
+        background-color: #cce5ff;
+        border: 1px solid #b8daff;
+    }
+    .profit-card .amount {
+        color: #004085;
+    }
+    .month-table th {
+        position: sticky;
+        top: 56px;
+        background: #fff;
+        z-index: 10;
+    }
+    .category-breakdown {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .nav-pills .nav-link.active {
+        background-color: #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1><i class="bi bi-bar-chart-line"></i> Financial Reports</h1>
+    </div>
+    <div class="col-md-4">
+        <form method="GET" class="row g-2">
+            <div class="col-6">
+                <select name="year" class="form-select" onchange="this.form.submit()">
+                    {% for y in years %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6">
+                <a href="{{ url_for('export') }}?year={{ selected_year }}&period=first" class="btn btn-outline-success w-100">
+                    <i class="bi bi-download"></i> Export
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="summary-card income-card">
+            <h3>Total Income</h3>
+            <div class="amount">R {{ "{:,.2f}".format(totals.income) }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card expense-card">
+            <h3>Total Expenses</h3>
+            <div class="amount">R {{ "{:,.2f}".format(totals.expenses) }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card profit-card">
+            <h3>Net Profit</h3>
+            <div class="amount">R {{ "{:,.2f}".format(totals.profit) }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs for different views -->
+<ul class="nav nav-pills mb-3" id="reportTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="monthly-tab" data-bs-toggle="pill" data-bs-target="#monthly" type="button">
+            <i class="bi bi-calendar-month"></i> Monthly Summary
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="category-tab" data-bs-toggle="pill" data-bs-target="#category" type="button">
+            <i class="bi bi-tags"></i> By Category
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="detailed-tab" data-bs-toggle="pill" data-bs-target="#detailed" type="button">
+            <i class="bi bi-table"></i> Monthly by Category
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="reportTabsContent">
+    <!-- Monthly Summary Tab -->
+    <div class="tab-pane fade show active" id="monthly" role="tabpanel">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover month-table">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th class="text-end">Income</th>
+                        <th class="text-end">Business Expenses</th>
+                        <th class="text-end">Personal Expenses</th>
+                        <th class="text-end">Net Profit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for month in monthly_summary %}
+                    <tr>
+                        <td><strong>{{ month.month_name }}</strong></td>
+                        <td class="text-end text-success">R {{ "{:,.2f}".format(month.income) }}</td>
+                        <td class="text-end text-danger">R {{ "{:,.2f}".format(month.business_expenses) }}</td>
+                        <td class="text-end text-warning">R {{ "{:,.2f}".format(month.personal_expenses) }}</td>
+                        <td class="text-end {% if month.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            R {{ "{:,.2f}".format(month.profit) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th>Total</th>
+                        <th class="text-end">R {{ "{:,.2f}".format(totals.income) }}</th>
+                        <th class="text-end">R {{ "{:,.2f}".format(totals.business_expenses) }}</th>
+                        <th class="text-end">R {{ "{:,.2f}".format(totals.personal_expenses) }}</th>
+                        <th class="text-end">R {{ "{:,.2f}".format(totals.profit) }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Category Breakdown Tab -->
+    <div class="tab-pane fade" id="category" role="tabpanel">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-up-circle"></i> Income by Source</h5>
+                    </div>
+                    <div class="card-body category-breakdown">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% for cat in category_summary.income %}
+                                <tr>
+                                    <td>{{ cat.name }}</td>
+                                    <td class="text-end text-success">R {{ "{:,.2f}".format(cat.total) }}</td>
+                                    <td class="text-end text-muted">{{ cat.count }} txns</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-down-circle"></i> Business Expenses by Category</h5>
+                    </div>
+                    <div class="card-body category-breakdown">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% for cat in category_summary.business_expenses %}
+                                <tr>
+                                    <td>{{ cat.name }}</td>
+                                    <td class="text-end text-danger">R {{ "{:,.2f}".format(cat.total) }}</td>
+                                    <td class="text-end text-muted">{{ cat.count }} txns</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="bi bi-person"></i> Personal Expenses by Category</h5>
+                    </div>
+                    <div class="card-body category-breakdown">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% for cat in category_summary.personal_expenses %}
+                                <tr>
+                                    <td>{{ cat.name }}</td>
+                                    <td class="text-end">R {{ "{:,.2f}".format(cat.total) }}</td>
+                                    <td class="text-end text-muted">{{ cat.count }} txns</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="bi bi-x-circle"></i> Excluded Transactions</h5>
+                    </div>
+                    <div class="card-body category-breakdown">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% for cat in category_summary.excluded %}
+                                <tr>
+                                    <td>{{ cat.name }}</td>
+                                    <td class="text-end">R {{ "{:,.2f}".format(cat.total) }}</td>
+                                    <td class="text-end text-muted">{{ cat.count }} txns</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Monthly by Category Tab -->
+    <div class="tab-pane fade" id="detailed" role="tabpanel">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Category</th>
+                        {% for month in months %}
+                        <th class="text-end">{{ month }}</th>
+                        {% endfor %}
+                        <th class="text-end table-dark">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cat_name, data in detailed_monthly.items() %}
+                    <tr class="{% if data.type == 'income' %}table-success{% elif data.type == 'business_expense' %}table-danger{% endif %}">
+                        <td><strong>{{ cat_name }}</strong></td>
+                        {% for month in months %}
+                        <td class="text-end">
+                            {% if data.months.get(month, 0) != 0 %}
+                            R {{ "{:,.0f}".format(data.months.get(month, 0)|abs) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td class="text-end table-dark"><strong>R {{ "{:,.2f}".format(data.total|abs) }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

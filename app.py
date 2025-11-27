@@ -11,6 +11,7 @@ from src.services.pdf_parser import BankStatementParser, detect_duplicates
 from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
 from src.services.excel_export import generate_tax_export
 from src.services.tax_calculator import calculate_tax_from_transactions
+from src.services.reports import aggregate_transactions, get_available_years, get_transactions_for_year, MONTHS
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -69,6 +70,26 @@ def index():
                          statements=statements,
                          total_transactions=total_transactions,
                          uncategorized=uncategorized)
+
+
+@app.route('/reports')
+@login_required
+def reports():
+    """Financial reports - income and expenses by month and category"""
+    selected_year = request.args.get('year', datetime.now().year, type=int)
+    years = get_available_years(db.session, Transaction)
+    transactions = get_transactions_for_year(Transaction, selected_year)
+
+    report_data = aggregate_transactions(transactions)
+
+    return render_template('reports.html',
+                          selected_year=selected_year,
+                          years=years,
+                          monthly_summary=report_data['monthly_summary'],
+                          totals=type('obj', (object,), report_data['totals'])(),
+                          category_summary=report_data['category_summary'],
+                          detailed_monthly=report_data['detailed_monthly'],
+                          months=report_data['months'])
 
 
 def auto_mark_duplicates():
@@ -155,19 +176,15 @@ def upload():
 
                     # Add transactions
                     for trans_data in result['transactions']:
-                        # Categorize
-                        cat_key, confidence = categorize_transaction(
+                        # Categorize - returns category name directly
+                        cat_name, confidence = categorize_transaction(
                             trans_data['description'],
                             trans_data['amount']
                         )
 
                         category = None
-                        if cat_key:
-                            cat_name = None
-                            from src.services.categorizer import CATEGORIES
-                            if cat_key in CATEGORIES:
-                                cat_name = CATEGORIES[cat_key]['name']
-                                category = get_category_by_name(db, Category, cat_name)
+                        if cat_name:
+                            category = get_category_by_name(db, Category, cat_name)
 
                         # Skip inter-account transfers for income tracking
                         skip_income = False
@@ -248,12 +265,33 @@ def edit_transaction(id):
 
         db.session.commit()
         flash('Transaction updated successfully', 'success')
-        return redirect(url_for('transactions'))
+
+        # Preserve filter parameters when redirecting back
+        category_id = request.form.get('filter_category_id')
+        start_date = request.form.get('filter_start_date')
+        end_date = request.form.get('filter_end_date')
+        page = request.form.get('filter_page', 1)
+
+        return redirect(url_for('transactions',
+                               category_id=category_id if category_id else None,
+                               start_date=start_date if start_date else None,
+                               end_date=end_date if end_date else None,
+                               page=page))
 
     categories = Category.query.all()
+
+    # Get filter parameters from query string to pass to template
+    filter_params = {
+        'category_id': request.args.get('category_id', ''),
+        'start_date': request.args.get('start_date', ''),
+        'end_date': request.args.get('end_date', ''),
+        'page': request.args.get('page', 1)
+    }
+
     return render_template('edit_transaction.html',
                          transaction=transaction,
-                         categories=categories)
+                         categories=categories,
+                         filter_params=filter_params)
 
 
 @app.route('/transaction/<int:id>/delete', methods=['POST'])
@@ -379,13 +417,34 @@ def split_transaction(id):
 
         db.session.commit()
         flash('Transaction split successfully', 'success')
-        return redirect(url_for('transactions'))
+
+        # Preserve filter parameters when redirecting back
+        category_id = request.form.get('filter_category_id')
+        start_date = request.form.get('filter_start_date')
+        end_date = request.form.get('filter_end_date')
+        page = request.form.get('filter_page', 1)
+
+        return redirect(url_for('transactions',
+                               category_id=category_id if category_id else None,
+                               start_date=start_date if start_date else None,
+                               end_date=end_date if end_date else None,
+                               page=page))
 
     categories = Category.query.all()
+
+    # Get filter parameters from query string to pass to template
+    filter_params = {
+        'category_id': request.args.get('category_id', ''),
+        'start_date': request.args.get('start_date', ''),
+        'end_date': request.args.get('end_date', ''),
+        'page': request.args.get('page', 1)
+    }
+
     return render_template(
         'split_transaction.html',
         transaction=parent,
-        categories=categories
+        categories=categories,
+        filter_params=filter_params
     )
 
 
@@ -475,6 +534,59 @@ def auto_mark_all_duplicates():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/bulk_update_category', methods=['POST'])
+@login_required
+def bulk_update_category():
+    """Bulk update category for multiple transactions"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+    category_id = data.get('category_id')
+
+    if not transaction_ids:
+        return jsonify({'success': False, 'error': 'No transactions selected'}), 400
+
+    if not category_id:
+        return jsonify({'success': False, 'error': 'No category selected'}), 400
+
+    try:
+        count = Transaction.query.filter(
+            Transaction.id.in_(transaction_ids)
+        ).update({
+            Transaction.category_id: category_id,
+            Transaction.is_manual: True
+        }, synchronize_session=False)
+
+        db.session.commit()
+        return jsonify({'success': True, 'count': count})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bulk_delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    """Bulk soft-delete multiple transactions"""
+    data = request.get_json()
+    transaction_ids = data.get('transaction_ids', [])
+
+    if not transaction_ids:
+        return jsonify({'success': False, 'error': 'No transactions selected'}), 400
+
+    try:
+        count = Transaction.query.filter(
+            Transaction.id.in_(transaction_ids)
+        ).update({
+            Transaction.is_deleted: True
+        }, synchronize_session=False)
+
+        db.session.commit()
+        return jsonify({'success': True, 'count': count})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/tax_calculator')
 @login_required
 def tax_calculator():
@@ -495,6 +607,14 @@ def calculate_tax():
     medical_aid_members = int(data.get('medical_aid_members', 0))
     previous_payments = Decimal(data.get('previous_payments', '0'))
 
+    # Home office parameters (optional - uses defaults if not provided)
+    home_office_sqm = data.get('home_office_sqm')
+    house_total_sqm = data.get('house_total_sqm')
+    if home_office_sqm is not None:
+        home_office_sqm = Decimal(str(home_office_sqm))
+    if house_total_sqm is not None:
+        house_total_sqm = Decimal(str(house_total_sqm))
+
     # Parse dates
     try:
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
@@ -513,16 +633,18 @@ def calculate_tax():
         Transaction.date <= end_date
     ).all()
 
-    # Convert to list of dicts
+    # Convert to list of dicts with category_type for proper classification
     trans_list = []
     for t in transactions:
         category_name = t.category.name if t.category else 'Uncategorized'
+        category_type = t.category.category_type if t.category else 'personal_expense'
         trans_list.append({
             'id': t.id,
             'date': t.date,
             'description': t.description,
             'amount': t.amount,
-            'category': category_name
+            'category': category_name,
+            'category_type': category_type
         })
 
     # Calculate tax (pass db session for loading tax tables from database)
@@ -533,7 +655,9 @@ def calculate_tax():
         age=age,
         medical_aid_members=medical_aid_members,
         previous_payments=previous_payments,
-        db_session=db.session
+        db_session=db.session,
+        home_office_sqm=home_office_sqm,
+        house_total_sqm=house_total_sqm
     )
 
     # Convert Decimals to strings for JSON serialization
@@ -549,6 +673,7 @@ def calculate_tax():
             'previous_payments': str(tax_result['previous_payments']),
             'provisional_payment': str(tax_result['provisional_payment']),
             'effective_rate': str(tax_result['effective_rate']),
+            'tax_year': tax_result['tax_year'],
             'tax_breakdown': {
                 'taxable_income': str(tax_result['tax_breakdown']['taxable_income']),
                 'tax_before_rebates': str(
@@ -563,8 +688,43 @@ def calculate_tax():
                 'age': tax_result['tax_breakdown']['age'],
                 'medical_aid_members': tax_result['tax_breakdown']['medical_aid_members'],
             },
+            # Breakdowns by category type for transparency
+            'income_breakdown': {
+                k: str(v) for k, v in tax_result['income_breakdown'].items()
+            },
             'expense_breakdown': {
                 k: str(v) for k, v in tax_result['expense_breakdown'].items()
+            },
+            'personal_breakdown': {
+                k: str(v) for k, v in tax_result['personal_breakdown'].items()
+            },
+            'excluded_breakdown': {
+                k: str(v) for k, v in tax_result['excluded_breakdown'].items()
+            },
+            # Totals for transparency
+            'total_personal_expenses': str(tax_result['total_personal_expenses']),
+            'total_excluded': str(tax_result['total_excluded']),
+            # Transaction counts
+            'transaction_counts': tax_result['transaction_counts'],
+            # Home office apportionment
+            'home_office': {
+                'office_sqm': str(tax_result['home_office']['office_sqm']),
+                'house_sqm': str(tax_result['home_office']['house_sqm']),
+                'percentage': tax_result['home_office']['percentage'],
+                'apportioned_categories': tax_result['home_office']['apportioned_categories'],
+                'total_reduction': str(tax_result['home_office']['total_reduction']),
+                'detail': {
+                    cat: {
+                        'full': str(vals['full']),
+                        'apportioned': str(vals['apportioned']),
+                        'reduction': str(vals['reduction'])
+                    }
+                    for cat, vals in tax_result['home_office']['detail'].items()
+                }
+            },
+            # Full expense breakdown before apportionment
+            'expense_breakdown_full': {
+                k: str(v) for k, v in tax_result['expense_breakdown_full'].items()
             }
         },
         'transaction_count': len(trans_list)

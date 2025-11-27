@@ -153,24 +153,27 @@ def _seed_test_data():
 
 @pytest.fixture
 def sample_transactions():
-    """Sample transactions for testing"""
+    """Sample transactions for testing - includes category_type for tax calculation"""
     return [
         {
             'date': date(2025, 3, 1),
             'description': 'PRECISE DIGITAL PAYMENT',
             'amount': Decimal('10000.00'),
-            'category': 'Income'
+            'category': 'Income',
+            'category_type': 'income'
         },
         {
             'date': date(2025, 3, 15),
             'description': 'CLAUDE.AI SUBSCRIPTION',
             'amount': Decimal('-99.00'),
-            'category': 'Technology/Software'
+            'category': 'Technology/Software',
+            'category_type': 'business_expense'
         },
         {
             'date': date(2025, 3, 20),
             'description': 'SYSTEM INTEREST DEBIT',
             'amount': Decimal('-5000.00'),
-            'category': 'Interest (Mortgage)'
+            'category': 'Interest (Mortgage)',
+            'category_type': 'business_expense'
         },
     ]

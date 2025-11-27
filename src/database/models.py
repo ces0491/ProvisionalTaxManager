@@ -84,19 +84,6 @@ class ExpenseRule(db.Model):  # type: ignore[name-defined]
     is_regex = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
 
-class TaxPeriod(db.Model):  # type: ignore[name-defined]
-    """Tax filing periods"""
-    __tablename__ = 'tax_periods'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)  # e.g., "First Provisional 2025"
-    period_type = db.Column(db.String(50), nullable=False)  # first, second
-    start_date = db.Column(db.Date, nullable=False)  # Mar 1 or Sep 1
-    end_date = db.Column(db.Date, nullable=False)  # Aug 31 or Feb 28/29
-    due_date = db.Column(db.Date, nullable=False)  # End of Aug or Feb
-    year = db.Column(db.Integer, nullable=False)
-
-
 class TaxYear(db.Model):  # type: ignore[name-defined]
     """Tax year configuration (e.g., 2025/2026 tax year)"""
     __tablename__ = 'tax_years'
@@ -174,26 +161,3 @@ class VATConfig(db.Model):  # type: ignore[name-defined]
     def __repr__(self):
         rate_pct = float(self.standard_rate) * 100
         return f"<VATConfig {rate_pct}% from {self.effective_from}>"
-
-
-class VATPeriod(db.Model):  # type: ignore[name-defined]
-    """VAT return filing periods (6-monthly in your case)"""
-    __tablename__ = 'vat_periods'
-
-    id = db.Column(db.Integer, primary_key=True)
-    period_name = db.Column(db.String(100), nullable=False)  # e.g., "VAT Jan-Jun 2025"
-    start_date = db.Column(db.Date, nullable=False)
-    end_date = db.Column(db.Date, nullable=False)
-    due_date = db.Column(db.Date, nullable=False)  # 25th of month following period
-    filing_frequency = db.Column(db.String(20), default='bi_annual')  # monthly, bi_monthly, bi_annual
-
-    # VAT Return summary (calculated from transactions)
-    output_vat = db.Column(db.Numeric(12, 2))  # VAT on sales
-    input_vat = db.Column(db.Numeric(12, 2))  # VAT on purchases (claimable)
-    net_vat = db.Column(db.Numeric(12, 2))  # Amount payable/(refundable)
-
-    is_submitted = db.Column(db.Boolean, default=False)
-    submitted_date = db.Column(db.Date)
-
-    def __repr__(self):
-        return f"<VATPeriod {self.period_name}>"

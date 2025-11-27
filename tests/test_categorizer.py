@@ -11,7 +11,7 @@ from src.services.categorizer import (
 
 
 class TestCategorizeTransaction:
-    """Test transaction categorization"""
+    """Test transaction categorization - returns category NAMES"""
 
     def test_categorize_income(self):
         """Test income categorization"""
@@ -19,7 +19,7 @@ class TestCategorizeTransaction:
             'PRECISE DIGITAIT25091ZA0799010',
             10000.00
         )
-        assert category == 'income'
+        assert category == 'Income'
         assert score == 1.0
 
     def test_categorize_income_teletransmission_fee(self):
@@ -28,7 +28,7 @@ class TestCategorizeTransaction:
             'PRECISE DIGITAL TELETRANSMISSION FEE',
             -50.00
         )
-        assert category == 'banking_fees'
+        assert category == 'Fees/Bank charges'
         assert score == 1.0
 
     def test_categorize_mortgage_interest(self):
@@ -37,7 +37,7 @@ class TestCategorizeTransaction:
             'SYSTEM INTEREST DEBIT',
             -5000.00
         )
-        assert category == 'interest_mortgage'
+        assert category == 'Interest (Mortgage)'
         assert score == 1.0
 
     def test_categorize_technology(self):
@@ -51,7 +51,7 @@ class TestCategorizeTransaction:
 
         for description in test_cases:
             category, score = categorize_transaction(description, -100.00)
-            assert category == 'technology_software'
+            assert category == 'Technology/Software'
             assert score == 1.0
 
     def test_categorize_medical(self):
@@ -64,19 +64,19 @@ class TestCategorizeTransaction:
 
         for description in test_cases:
             category, score = categorize_transaction(description, -500.00)
-            assert category in ['medical_aid', 'medical_fees']
+            assert category in ['Medical Aid', 'Medical Fees']
 
     def test_categorize_personal(self):
         """Test personal expense categorization"""
         test_cases = [
-            'NETFLIX.COM',
-            'YOUTUBE PREMIUM',
-            'VIRGIN ACT329618220',
+            ('NETFLIX.COM', 'Entertainment (Personal)'),
+            ('YOUTUBE PREMIUM', 'Entertainment (Personal)'),
+            ('VIRGIN ACT329618220', 'Gym'),
         ]
 
-        for description in test_cases:
+        for description, expected in test_cases:
             category, score = categorize_transaction(description, -100.00)
-            assert category in ['entertainment', 'gym']
+            assert category == expected
 
     def test_categorize_uncategorized(self):
         """Test uncategorized transaction"""
@@ -106,7 +106,7 @@ class TestCategorizeTransactionWithRules:
             -100.00,
             db_rules=None
         )
-        assert category == 'Entertainment'
+        assert category == 'Entertainment (Personal)'
         assert score == 1.0
 
     def test_categorize_with_rules(self, db_session):

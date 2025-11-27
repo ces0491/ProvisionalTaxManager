@@ -218,10 +218,14 @@ The application includes a comprehensive test suite with 79 tests covering:
 - Flask routes and API endpoints
 - Database models and relationships
 
-### Run Tests
-
 ```bash
 pytest
 ```
 
-For detailed test documentation, see [tests/README.md](tests/README.md)
+## Documentation
+
+Additional documentation in the `docs/` folder:
+
+- [Codebase Map](docs/codebase-map.md) - Project structure and navigation
+- [Tax Tables Guide](docs/tax-tables.md) - Managing SARS tax tables
+- [VAT Guide](docs/vat-guide.md) - VAT tracking and reporting

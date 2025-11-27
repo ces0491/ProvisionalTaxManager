@@ -58,7 +58,7 @@ class SATaxCalculator:
     def _load_from_database(self):
         """Load tax tables from database"""
         try:
-            from models import TaxYear
+            from src.database.models import TaxYear
 
             # Find the tax year
             tax_year_obj = TaxYear.query.filter_by(year=self.tax_year).first()
@@ -263,6 +263,20 @@ class SATaxCalculator:
         return credits
 
 
+# Home office apportionment configuration
+# Categories that should be apportioned based on home office percentage
+HOME_OFFICE_CATEGORIES = [
+    'Interest (Mortgage)',
+    'Maintenance',
+    'Municipal',
+    'Insurance',
+]
+
+# Default home office dimensions (can be overridden in function call)
+DEFAULT_HOME_OFFICE_SQM = Decimal('22')
+DEFAULT_HOUSE_TOTAL_SQM = Decimal('268')
+
+
 def calculate_tax_from_transactions(
     transactions: list,
     period_start: date,
@@ -271,13 +285,19 @@ def calculate_tax_from_transactions(
     medical_aid_members: int = 0,
     previous_payments: Decimal = Decimal('0'),
     tax_year: Optional[int] = None,
-    db_session=None
+    db_session=None,
+    home_office_sqm: Optional[Decimal] = None,
+    house_total_sqm: Optional[Decimal] = None
 ) -> Dict[str, Any]:
     """
     Calculate tax liability from transaction data
 
     Args:
-        transactions: List of transaction dicts with 'category' and 'amount'
+        transactions: List of transaction dicts with:
+            - 'category': Category name
+            - 'category_type': One of 'income', 'business_expense',
+                               'personal_expense', 'excluded'
+            - 'amount': Transaction amount
         period_start: Start date of tax period
         period_end: End date of tax period
         age: Taxpayer age
@@ -285,9 +305,11 @@ def calculate_tax_from_transactions(
         previous_payments: Tax already paid
         tax_year: Tax year to use (if None, derived from period_end)
         db_session: Database session for loading tax tables
+        home_office_sqm: Home office size in square meters (default: 22)
+        house_total_sqm: Total house size in square meters (default: 268)
 
     Returns:
-        Dictionary with comprehensive tax calculation
+        Dictionary with comprehensive tax calculation including breakdown
     """
     # Determine tax year from period_end if not specified
     if tax_year is None:
@@ -306,37 +328,145 @@ def calculate_tax_from_transactions(
     )
     period_months = max(1, months_diff)
 
-    # Summarize transactions
+    # Home office apportionment
+    office_sqm = home_office_sqm if home_office_sqm is not None else DEFAULT_HOME_OFFICE_SQM
+    house_sqm = house_total_sqm if house_total_sqm is not None else DEFAULT_HOUSE_TOTAL_SQM
+    home_office_percentage = (office_sqm / house_sqm) if house_sqm > 0 else Decimal('0')
+
+    # Summarize transactions by category_type
     total_income = Decimal('0')
-    total_expenses = Decimal('0')
+    total_business_expenses = Decimal('0')
+    total_personal_expenses = Decimal('0')
+    total_excluded = Decimal('0')
+
+    # Track apportionment adjustments
+    total_apportioned_reduction = Decimal('0')
+
+    # Detailed breakdowns (full amounts before apportionment)
+    income_breakdown: Dict[str, Decimal] = {}
     expense_breakdown: Dict[str, Decimal] = {}
+    expense_breakdown_full: Dict[str, Decimal] = {}  # Before apportionment
+    personal_breakdown: Dict[str, Decimal] = {}
+    excluded_breakdown: Dict[str, Decimal] = {}
+    apportionment_detail: Dict[str, Dict[str, Decimal]] = {}  # Category -> {full, apportioned, reduction}
+
+    # Transaction counts for transparency
+    income_count = 0
+    business_expense_count = 0
+    personal_expense_count = 0
+    excluded_count = 0
+    uncategorized_count = 0
 
     for trans in transactions:
         amount = Decimal(str(trans.get('amount', 0)))
         category = trans.get('category', 'Uncategorized')
+        category_type = trans.get('category_type', 'personal_expense')
 
-        if category == 'Income':
+        if category_type == 'income':
             total_income += abs(amount)
-        elif category and category not in ['Personal', 'Excluded', 'Income']:
-            # Business expense categories
-            total_expenses += abs(amount)
-            if category not in expense_breakdown:
-                expense_breakdown[category] = Decimal('0')
-            expense_breakdown[category] += abs(amount)
+            income_count += 1
+            if category not in income_breakdown:
+                income_breakdown[category] = Decimal('0')
+            income_breakdown[category] += abs(amount)
+
+        elif category_type == 'business_expense':
+            full_amount = abs(amount)
+            business_expense_count += 1
+
+            # Track full amount before apportionment
+            if category not in expense_breakdown_full:
+                expense_breakdown_full[category] = Decimal('0')
+            expense_breakdown_full[category] += full_amount
+
+            # Apply home office apportionment to relevant categories
+            if category in HOME_OFFICE_CATEGORIES:
+                apportioned_amount = (full_amount * home_office_percentage).quantize(Decimal('0.01'))
+                reduction = full_amount - apportioned_amount
+                total_apportioned_reduction += reduction
+
+                # Track apportionment details
+                if category not in apportionment_detail:
+                    apportionment_detail[category] = {
+                        'full': Decimal('0'),
+                        'apportioned': Decimal('0'),
+                        'reduction': Decimal('0')
+                    }
+                apportionment_detail[category]['full'] += full_amount
+                apportionment_detail[category]['apportioned'] += apportioned_amount
+                apportionment_detail[category]['reduction'] += reduction
+
+                # Use apportioned amount for tax calculation
+                total_business_expenses += apportioned_amount
+                if category not in expense_breakdown:
+                    expense_breakdown[category] = Decimal('0')
+                expense_breakdown[category] += apportioned_amount
+            else:
+                # Non-apportioned categories: use full amount
+                total_business_expenses += full_amount
+                if category not in expense_breakdown:
+                    expense_breakdown[category] = Decimal('0')
+                expense_breakdown[category] += full_amount
+
+        elif category_type == 'personal_expense':
+            total_personal_expenses += abs(amount)
+            personal_expense_count += 1
+            if category not in personal_breakdown:
+                personal_breakdown[category] = Decimal('0')
+            personal_breakdown[category] += abs(amount)
+
+        elif category_type == 'excluded':
+            total_excluded += abs(amount)
+            excluded_count += 1
+            if category not in excluded_breakdown:
+                excluded_breakdown[category] = Decimal('0')
+            excluded_breakdown[category] += abs(amount)
+
+        else:
+            # Uncategorized - treat as personal (non-deductible) to be safe
+            uncategorized_count += 1
+            total_personal_expenses += abs(amount)
 
     # Calculate tax using the appropriate tax year
     calculator = SATaxCalculator(tax_year=tax_year, db_session=db_session)
     tax_calc = calculator.calculate_provisional_tax(
         period_income=total_income,
-        period_expenses=total_expenses,
+        period_expenses=total_business_expenses,  # Only business expenses are deductible
         period_months=period_months,
         age=age,
         medical_aid_members=medical_aid_members,
         previous_payments=previous_payments
     )
 
-    # Add expense breakdown and tax year to result
+    # Add detailed breakdowns for transparency
     tax_calc['expense_breakdown'] = expense_breakdown
+    tax_calc['expense_breakdown_full'] = expense_breakdown_full  # Before apportionment
+    tax_calc['income_breakdown'] = income_breakdown
+    tax_calc['personal_breakdown'] = personal_breakdown
+    tax_calc['excluded_breakdown'] = excluded_breakdown
     tax_calc['tax_year'] = tax_year
+
+    # Add totals for transparency
+    tax_calc['total_personal_expenses'] = total_personal_expenses
+    tax_calc['total_excluded'] = total_excluded
+
+    # Add home office apportionment details
+    tax_calc['home_office'] = {
+        'office_sqm': office_sqm,
+        'house_sqm': house_sqm,
+        'percentage': round(float(home_office_percentage * 100), 1),
+        'apportioned_categories': list(HOME_OFFICE_CATEGORIES),
+        'total_reduction': total_apportioned_reduction,
+        'detail': apportionment_detail
+    }
+
+    # Add transaction counts for transparency
+    tax_calc['transaction_counts'] = {
+        'income': income_count,
+        'business_expense': business_expense_count,
+        'personal_expense': personal_expense_count,
+        'excluded': excluded_count,
+        'uncategorized': uncategorized_count,
+        'total': income_count + business_expense_count + personal_expense_count + excluded_count + uncategorized_count
+    }
 
     return tax_calc
