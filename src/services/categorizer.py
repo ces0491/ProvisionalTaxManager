@@ -132,6 +132,12 @@ CATEGORIES = {
             'INTERNATIONAL TXN FEE',
             'CASH FINANCE CHARGE',
             'EXCESS INTEREST',
+            'CREDIT INTEREST',
+            'CREDIT CARD INTEREST',
+            'INTEREST CHARGE',
+            'FINANCE CHARGE',
+            'LATE PAYMENT FEE',
+            'OVERLIMIT FEE',
         ],
     },
     'printing': {
@@ -240,6 +246,52 @@ CATEGORIES = {
         'type': 'personal_expense',
         'patterns': ['WONDERLAND', 'PITKIN CYCLES', 'SPORTSMANS WAREHOUSE'],
     },
+    'personal_care': {
+        'name': 'Personal Care',
+        'type': 'personal_expense',
+        'patterns': ['SALON', 'BARBER', 'HAIR', 'SPA', 'BEAUTY', 'NAIL', 'MASSAGE', 'SKINCARE'],
+    },
+    'cash_withdrawal': {
+        'name': 'Cash Withdrawal',
+        'type': 'personal_expense',
+        'patterns': ['CASH WITHDRAWAL', 'ATM WITHDRAWAL', 'CASH.*ATM', 'AUTOBANK CASH'],
+    },
+    'meals_personal': {
+        'name': 'Meals (Personal)',
+        'type': 'personal_expense',
+        'patterns': [
+            'RESTAURANT', 'STEERS', 'NANDOS', 'KFC', 'PIZZA', 'DEBONAIRS',
+            'WIMPY', 'OCEAN BASKET', 'ROCOMAMAS', 'SUSHI', 'MUGG.*BEAN',
+            'VIDA.*CAFFE', 'CAFE', 'DELI', 'BISTRO', 'EATERY',
+        ],
+    },
+    'clothing': {
+        'name': 'Clothing',
+        'type': 'personal_expense',
+        'patterns': [
+            'MR PRICE', 'MRPRICE', 'ACKERMANS', 'JET STORE', 'EDGARS', 'TRUWORTHS',
+            'FOSCHINI', 'MARKHAM', 'ZARA', 'H&M', 'COTTON ON', 'CAPE UNION',
+            'SPORTSCENE', 'TOTALSPORTS', 'DUE SOUTH', 'SHOES', 'FOOTWEAR',
+        ],
+    },
+    'fuel': {
+        'name': 'Fuel',
+        'type': 'personal_expense',
+        'patterns': [
+            'SHELL', 'CALTEX', 'SASOL', 'TOTAL GARAGE', 'BP GARAGE',
+            'PETROL', 'DIESEL', 'FUEL', 'FILLING STATION',
+        ],
+    },
+    'vehicle_other': {
+        'name': 'Vehicle (Other)',
+        'type': 'personal_expense',
+        'patterns': [
+            'CAR SERVICE', 'CAR WASH', 'TYRES', 'AUTO PARTS', 'BATTERY CENTRE',
+            'MIDAS', 'TIGER WHEEL', 'SUPA QUICK', 'EXHAUST', 'WINDSCREEN',
+            'LICENSE RENEWAL', 'VEHICLE LICENSE', 'E-TOLL', 'SANRAL', 'N1 CITY MOTOR',
+            'AUTOZONE', 'GOLDWAGEN', 'PANEL BEATER',
+        ],
+    },
 
     # EXCLUDED (not expenses, ignore these)
     'bond_payment': {
@@ -247,10 +299,15 @@ CATEGORIES = {
         'type': 'excluded',
         'patterns': ['DEBIT ORDER - DO', 'STD BANK BOND', 'SBSA HOMEL', 'DEBIT ORDER REVERSAL'],
     },
+    'inter_account_transfer': {
+        'name': 'Inter-Account Transfer',
+        'type': 'excluded',
+        'patterns': ['IB TRANSFER', 'AUTOBANK TRANSFER', 'FUND TRANSFERS'],
+    },
     'transfers': {
         'name': 'Transfers (Excluded)',
         'type': 'excluded',
-        'patterns': ['AUTOBANK TRANSFER', 'DEBI CHECK PAYMENT'],
+        'patterns': ['DEBI CHECK PAYMENT'],
     },
 }
 
@@ -351,20 +408,23 @@ def is_personal_from_business_mixed(description):
 
 
 def init_categories_in_db(db, Category):
-    """Initialize categories in the database"""
-    if Category.query.count() > 0:
-        return  # Already initialized
+    """Initialize categories in the database, adding any missing ones"""
+    existing_names = {c.name for c in Category.query.all()}
 
+    added = 0
     for cat_info in CATEGORIES.values():
-        pattern_desc = ', '.join(cat_info['patterns'][:3]) if cat_info['patterns'] else 'Manual only'
-        category = Category(
-            name=cat_info['name'],
-            category_type=cat_info['type'],
-            description=f"Auto-categorized: {pattern_desc}"
-        )
-        db.session.add(category)
+        if cat_info['name'] not in existing_names:
+            pattern_desc = ', '.join(cat_info['patterns'][:3]) if cat_info['patterns'] else 'Manual only'
+            category = Category(
+                name=cat_info['name'],
+                category_type=cat_info['type'],
+                description=f"Auto-categorized: {pattern_desc}"
+            )
+            db.session.add(category)
+            added += 1
 
-    db.session.commit()
+    if added > 0:
+        db.session.commit()
 
 
 def get_category_by_name(db, Category, name):

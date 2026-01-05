@@ -58,6 +58,7 @@ class Transaction(db.Model):  # type: ignore[name-defined]
     is_deleted = db.Column(db.Boolean, default=False)  # Soft delete
     is_manual = db.Column(db.Boolean, default=False)  # Manually added/edited
     notes = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # For mixed orders (like Takealot)
     original_amount = db.Column(db.Numeric(12, 2))  # If split from a larger purchase
@@ -72,6 +73,37 @@ class Transaction(db.Model):  # type: ignore[name-defined]
     # Relationships
     duplicate_of = db.relationship('Transaction', remote_side=[id], foreign_keys=[duplicate_of_id], backref='duplicates')
     parent_transaction = db.relationship('Transaction', remote_side=[id], foreign_keys=[parent_transaction_id], backref='split_items')
+
+class Receipt(db.Model):  # type: ignore[name-defined]
+    """Scanned receipts attached to transactions"""
+    __tablename__ = 'receipts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)  # Path to receipt file
+    filename = db.Column(db.String(255), nullable=False)  # Original filename
+    file_type = db.Column(db.String(50))  # pdf, jpg, png, etc.
+    description = db.Column(db.Text)  # Optional note about the receipt
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    transaction = db.relationship('Transaction', backref=db.backref('receipts', lazy=True, cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f"<Receipt {self.filename} for Transaction {self.transaction_id}>"
+
+
+class DismissedDuplicate(db.Model):  # type: ignore[name-defined]
+    """Track duplicate pairs that have been reviewed and dismissed"""
+    __tablename__ = 'dismissed_duplicates'
+
+    id = db.Column(db.Integer, primary_key=True)
+    transaction1_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
+    transaction2_id = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable=False)
+    dismissed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<DismissedDuplicate {self.transaction1_id} <-> {self.transaction2_id}>"
+
 
 class ExpenseRule(db.Model):  # type: ignore[name-defined]
     """Pattern matching rules for auto-categorization"""

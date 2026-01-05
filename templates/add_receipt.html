@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Add Receipt{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1><i class="bi bi-receipt"></i> Attach Receipt</h1>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <strong>Transaction:</strong> {{ transaction.description[:50] }}{% if transaction.description|length > 50 %}...{% endif %}
+                <br><small class="text-muted">{{ transaction.date.strftime('%d %b %Y') }} | R {{ "%.2f"|format(transaction.amount|abs) }}</small>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="file_path" class="form-label">Receipt File Path</label>
+                        <input type="text" class="form-control" id="file_path" name="file_path"
+                               placeholder="C:\Users\...\Receipt.pdf" required>
+                        <div class="form-text">
+                            Enter the full path to your receipt file (PDF, JPG, PNG, etc.)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (optional)</label>
+                        <input type="text" class="form-control" id="description" name="description"
+                               placeholder="e.g., Office supplies from Takealot">
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-paperclip"></i> Attach Receipt
+                        </button>
+                        <a href="{{ url_for('edit_transaction', id=transaction.id) }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4 bg-light">
+            <div class="card-body">
+                <h6><i class="bi bi-info-circle"></i> Tips</h6>
+                <ul class="mb-0 small">
+                    <li>Receipt files are linked by path - they stay in their original location</li>
+                    <li>Supported formats: PDF, JPG, PNG, and other common image formats</li>
+                    <li>You can attach multiple receipts to a single transaction</li>
+                    <li>Example path: <code>C:\Users\cesai_b8mratk\OneDrive\Documents\Admin\Tax\TY2026\expenses\Receipt_2025-08-07.pdf</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

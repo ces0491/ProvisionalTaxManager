@@ -10,7 +10,7 @@ ProvisionalTaxManager/
 ├── src/                    # Source code package
 │   ├── config.py          # Application configuration
 │   ├── database/          # Database-related code
-│   │   └── models.py      # SQLAlchemy models (9 models)
+│   │   └── models.py      # SQLAlchemy models (12 models)
 │   └── services/          # Business logic services
 │       ├── categorizer.py      # Transaction categorization
 │       ├── excel_export.py     # Excel report generation
@@ -65,6 +65,10 @@ ProvisionalTaxManager/
 
 **VAT Model**:
 10. `VATConfig` - VAT rate configuration
+
+**Supporting Models**:
+11. `Receipt` - Receipt attachments linked to transactions
+12. `DismissedDuplicate` - Tracks dismissed duplicate pairs
 
 ## Transaction Flow
 

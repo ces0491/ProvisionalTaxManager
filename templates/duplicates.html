@@ -49,6 +49,9 @@
                     <button class="btn btn-sm btn-danger" onclick="markDuplicate({{ dup.trans1.id }}, {{ dup.trans2.id }})">
                         Mark Transaction 1 as Duplicate
                     </button>
+                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="dismissDuplicate({{ dup.trans1.id }}, {{ dup.trans2.id }})">
+                        <i class="bi bi-x-circle"></i> Not a Duplicate
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -79,14 +82,25 @@ function markDuplicate(transId, duplicateOfId) {
             duplicate_of_id: duplicateOfId
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP error ${response.status}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
-            alert('Transaction marked as duplicate');
+            alert(data.message || 'Transaction marked as duplicate');
             location.reload();
         } else {
-            alert('Error: ' + data.error);
+            alert('Error: ' + (data.error || 'Unknown error'));
         }
+    })
+    .catch(error => {
+        alert('Request failed: ' + error.message);
+        console.error('Mark duplicate error:', error);
     });
 }
 
@@ -112,6 +126,27 @@ function autoMarkExactDuplicates() {
     })
     .catch(error => {
         alert('Error: ' + error);
+    });
+}
+
+function dismissDuplicate(trans1Id, trans2Id) {
+    fetch('{{ url_for("dismiss_duplicate") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            transaction1_id: trans1Id,
+            transaction2_id: trans2Id
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
     });
 }
 </script>

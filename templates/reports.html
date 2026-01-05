@@ -61,9 +61,9 @@
     <div class="col-md-4">
         <form method="GET" class="row g-2">
             <div class="col-6">
-                <select name="year" class="form-select" onchange="this.form.submit()">
+                <select name="year" class="form-select" onchange="this.form.submit()" title="Tax Year (1 Mar - 28 Feb)">
                     {% for y in years %}
-                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>TY{{ y }} (Mar {{ y-1 }} - Feb {{ y }})</option>
                     {% endfor %}
                 </select>
             </div>
@@ -249,19 +249,26 @@
     <div class="tab-pane fade" id="detailed" role="tabpanel">
         <div class="table-responsive">
             <table class="table table-sm table-bordered">
-                <thead class="table-light">
+                <thead class="table-light" style="position: sticky; top: 56px; z-index: 10;">
                     <tr>
-                        <th>Category</th>
+                        <th style="min-width: 180px;">Category</th>
                         {% for month in months %}
-                        <th class="text-end">{{ month }}</th>
+                        <th class="text-end" style="min-width: 75px;">{{ month }}</th>
                         {% endfor %}
-                        <th class="text-end table-dark">Total</th>
+                        <th class="text-end table-dark" style="min-width: 100px;">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for cat_name, data in detailed_monthly.items() %}
-                    <tr class="{% if data.type == 'income' %}table-success{% elif data.type == 'business_expense' %}table-danger{% endif %}">
-                        <td><strong>{{ cat_name }}</strong></td>
+                    <!-- INCOME SECTION -->
+                    {% if detailed_monthly.income %}
+                    <tr class="table-success">
+                        <td colspan="{{ months|length + 2 }}"><strong><i class="bi bi-arrow-up-circle"></i> INCOME</strong></td>
+                    </tr>
+                    {% set income_total = namespace(value=0) %}
+                    {% for cat_name, data in detailed_monthly.income.items() %}
+                    {% set income_total.value = income_total.value + data.total|abs|float %}
+                    <tr style="background-color: #e8f5e9;">
+                        <td class="ps-4">{{ cat_name }}</td>
                         {% for month in months %}
                         <td class="text-end">
                             {% if data.months.get(month, 0) != 0 %}
@@ -271,9 +278,111 @@
                             {% endif %}
                         </td>
                         {% endfor %}
-                        <td class="text-end table-dark"><strong>R {{ "{:,.2f}".format(data.total|abs) }}</strong></td>
+                        <td class="text-end fw-bold" style="background-color: #c8e6c9;">R {{ "{:,.2f}".format(data.total|abs) }}</td>
                     </tr>
                     {% endfor %}
+                    <tr class="table-success fw-bold">
+                        <td class="text-end">Total Income</td>
+                        {% for month in months %}<td></td>{% endfor %}
+                        <td class="text-end">R {{ "{:,.2f}".format(income_total.value) }}</td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- BUSINESS EXPENSES SECTION -->
+                    {% if detailed_monthly.business %}
+                    <tr class="table-danger">
+                        <td colspan="{{ months|length + 2 }}"><strong><i class="bi bi-briefcase"></i> BUSINESS EXPENSES</strong></td>
+                    </tr>
+                    {% set business_total = namespace(value=0) %}
+                    {% for cat_name, data in detailed_monthly.business.items() %}
+                    {% set business_total.value = business_total.value + data.total|abs|float %}
+                    <tr style="background-color: #ffebee;">
+                        <td class="ps-4">{{ cat_name }}</td>
+                        {% for month in months %}
+                        <td class="text-end">
+                            {% if data.months.get(month, 0) != 0 %}
+                            R {{ "{:,.0f}".format(data.months.get(month, 0)|abs) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td class="text-end fw-bold" style="background-color: #ffcdd2;">R {{ "{:,.2f}".format(data.total|abs) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-danger fw-bold">
+                        <td class="text-end">Total Business Expenses</td>
+                        {% for month in months %}<td></td>{% endfor %}
+                        <td class="text-end">R {{ "{:,.2f}".format(business_total.value) }}</td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- NET PROFIT ROW -->
+                    {% if detailed_monthly.income and detailed_monthly.business %}
+                    <tr class="table-primary fw-bold">
+                        <td class="text-end"><i class="bi bi-calculator"></i> NET PROFIT (Income - Business Expenses)</td>
+                        {% for month in months %}<td></td>{% endfor %}
+                        <td class="text-end">R {{ "{:,.2f}".format(income_total.value - business_total.value) }}</td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- PERSONAL EXPENSES SECTION -->
+                    {% if detailed_monthly.personal %}
+                    <tr class="table-warning">
+                        <td colspan="{{ months|length + 2 }}"><strong><i class="bi bi-person"></i> PERSONAL EXPENSES</strong></td>
+                    </tr>
+                    {% set personal_total = namespace(value=0) %}
+                    {% for cat_name, data in detailed_monthly.personal.items() %}
+                    {% set personal_total.value = personal_total.value + data.total|abs|float %}
+                    <tr style="background-color: #fff8e1;">
+                        <td class="ps-4">{{ cat_name }}</td>
+                        {% for month in months %}
+                        <td class="text-end">
+                            {% if data.months.get(month, 0) != 0 %}
+                            R {{ "{:,.0f}".format(data.months.get(month, 0)|abs) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td class="text-end fw-bold" style="background-color: #ffecb3;">R {{ "{:,.2f}".format(data.total|abs) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-warning fw-bold">
+                        <td class="text-end">Total Personal Expenses</td>
+                        {% for month in months %}<td></td>{% endfor %}
+                        <td class="text-end">R {{ "{:,.2f}".format(personal_total.value) }}</td>
+                    </tr>
+                    {% endif %}
+
+                    <!-- EXCLUDED SECTION -->
+                    {% if detailed_monthly.excluded %}
+                    <tr class="table-secondary">
+                        <td colspan="{{ months|length + 2 }}"><strong><i class="bi bi-x-circle"></i> EXCLUDED (Not counted in P&L)</strong></td>
+                    </tr>
+                    {% set excluded_total = namespace(value=0) %}
+                    {% for cat_name, data in detailed_monthly.excluded.items() %}
+                    {% set excluded_total.value = excluded_total.value + data.total|abs|float %}
+                    <tr style="background-color: #f5f5f5;">
+                        <td class="ps-4 text-muted">{{ cat_name }}</td>
+                        {% for month in months %}
+                        <td class="text-end text-muted">
+                            {% if data.months.get(month, 0) != 0 %}
+                            R {{ "{:,.0f}".format(data.months.get(month, 0)|abs) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td class="text-end fw-bold text-muted" style="background-color: #e0e0e0;">R {{ "{:,.2f}".format(data.total|abs) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="table-secondary fw-bold">
+                        <td class="text-end text-muted">Total Excluded</td>
+                        {% for month in months %}<td></td>{% endfor %}
+                        <td class="text-end text-muted">R {{ "{:,.2f}".format(excluded_total.value) }}</td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>

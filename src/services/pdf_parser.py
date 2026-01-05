@@ -598,7 +598,13 @@ class BankStatementParser:
 
         for fmt in formats:
             try:
-                return datetime.strptime(date_str, fmt).date()
+                parsed_date = datetime.strptime(date_str, fmt).date()
+                # Validate year is reasonable (2020-2030)
+                if 2020 <= parsed_date.year <= 2030:
+                    return parsed_date
+                # If year is unreasonable but we have statement dates, use those
+                if self.start_date and 2020 <= self.start_date.year <= 2030:
+                    return parsed_date.replace(year=self.start_date.year)
             except ValueError:
                 continue
 

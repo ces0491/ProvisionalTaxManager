@@ -11,7 +11,8 @@ transaction categorization, and tax report generation.
 - **Smart Categorization**: Auto-categorizes transactions based on 30+
   business rules
 - **Duplicate Detection**: Identifies and merges duplicate transactions
-  from overlapping statements
+  from overlapping statements with persistent dismissal tracking
+- **Receipt Management**: Attach and view receipt scans/PDFs linked to transactions
 - **Manual Editing**: Edit, recategorize, or delete transactions as needed
 - **Manual Transactions**: Add cash expenses or income not on statements
 - **Transaction Splitting**: Split mixed purchases (like Takealot) into

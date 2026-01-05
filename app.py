@@ -1,12 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from functools import wraps
 import os
+import shutil
+import tempfile
+import zipfile
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from decimal import Decimal
 
 from src.config import Config
-from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule
+from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule, Receipt, DismissedDuplicate
 from src.services.pdf_parser import BankStatementParser, detect_duplicates
 from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
 from src.services.excel_export import generate_tax_export
@@ -80,7 +83,7 @@ def reports():
     years = get_available_years(db.session, Transaction)
     transactions = get_transactions_for_year(Transaction, selected_year)
 
-    report_data = aggregate_transactions(transactions)
+    report_data = aggregate_transactions(transactions, tax_year=selected_year)
 
     return render_template('reports.html',
                           selected_year=selected_year,
@@ -94,7 +97,9 @@ def reports():
 
 def auto_mark_duplicates():
     """
-    Automatically mark 100% duplicate transactions
+    Automatically mark duplicate transactions.
+    - 100% matches: always mark as duplicate
+    - 80% matches: mark if from same account (different statement formats)
     Returns count of duplicates marked
     """
     # Get all non-deleted, non-duplicate transactions
@@ -109,13 +114,22 @@ def auto_mark_duplicates():
 
     duplicate_pairs = detect_duplicates(trans_list)
 
-    # Auto-mark only 100% matches (score == 1.0)
     marked_count = 0
     for idx1, idx2, score in duplicate_pairs:
-        if score == 1.0:  # Only exact matches
-            trans1 = all_transactions[idx1]
-            trans2 = all_transactions[idx2]
+        trans1 = all_transactions[idx1]
+        trans2 = all_transactions[idx2]
 
+        should_mark = False
+
+        if score == 1.0:
+            # Exact match - always mark
+            should_mark = True
+        elif score >= 0.8:
+            # Partial match - mark if same account (likely different statement format)
+            if trans1.statement.account_id == trans2.statement.account_id:
+                should_mark = True
+
+        if should_mark:
             # Mark the second one as duplicate (keep the first)
             trans2.is_duplicate = True
             trans2.duplicate_of_id = trans1.id
@@ -448,6 +462,84 @@ def split_transaction(id):
     )
 
 
+# Receipt routes
+@app.route('/transaction/<int:id>/receipts')
+@login_required
+def transaction_receipts(id):
+    """View receipts for a transaction"""
+    transaction = Transaction.query.get_or_404(id)
+    return render_template('receipts.html', transaction=transaction)
+
+
+@app.route('/transaction/<int:id>/receipt/add', methods=['GET', 'POST'])
+@login_required
+def add_receipt(id):
+    """Attach a receipt to a transaction"""
+    transaction = Transaction.query.get_or_404(id)
+
+    if request.method == 'POST':
+        file_path = request.form.get('file_path', '').strip()
+        description = request.form.get('description', '').strip()
+
+        if not file_path:
+            flash('Please provide a file path', 'error')
+            return render_template('add_receipt.html', transaction=transaction)
+
+        # Normalize path
+        file_path = os.path.normpath(file_path)
+
+        # Validate file exists
+        if not os.path.exists(file_path):
+            flash(f'File not found: {file_path}', 'error')
+            return render_template('add_receipt.html', transaction=transaction)
+
+        # Extract filename and type
+        filename = os.path.basename(file_path)
+        file_type = os.path.splitext(filename)[1].lower().lstrip('.')
+
+        receipt = Receipt(
+            transaction_id=transaction.id,
+            file_path=file_path,
+            filename=filename,
+            file_type=file_type,
+            description=description
+        )
+        db.session.add(receipt)
+        db.session.commit()
+
+        flash(f'Receipt "{filename}" attached successfully', 'success')
+        return redirect(url_for('edit_transaction', id=transaction.id))
+
+    return render_template('add_receipt.html', transaction=transaction)
+
+
+@app.route('/receipt/<int:id>/view')
+@login_required
+def view_receipt(id):
+    """View/download a receipt file"""
+    receipt = Receipt.query.get_or_404(id)
+
+    if not os.path.exists(receipt.file_path):
+        flash(f'Receipt file not found: {receipt.file_path}', 'error')
+        return redirect(url_for('edit_transaction', id=receipt.transaction_id))
+
+    return send_file(receipt.file_path, as_attachment=False)
+
+
+@app.route('/receipt/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_receipt(id):
+    """Remove a receipt attachment (doesn't delete the file)"""
+    receipt = Receipt.query.get_or_404(id)
+    transaction_id = receipt.transaction_id
+
+    db.session.delete(receipt)
+    db.session.commit()
+
+    flash('Receipt removed', 'success')
+    return redirect(url_for('edit_transaction', id=transaction_id))
+
+
 @app.route('/export')
 @login_required
 def export():
@@ -475,6 +567,82 @@ def export():
         return redirect(url_for('index'))
 
 
+@app.route('/export/receipts')
+@login_required
+def export_receipts():
+    """Export all receipts for a period as a ZIP file with an index"""
+    period_type = request.args.get('period', 'first')
+    year = request.args.get('year', datetime.now().year, type=int)
+
+    # Determine date range
+    if period_type == 'first':
+        start_date = datetime(year, 3, 1).date()
+        end_date = datetime(year, 8, 31).date()
+        period_name = f'Mar-Aug_{year}'
+    else:
+        start_date = datetime(year, 9, 1).date()
+        end_date = datetime(year + 1, 2, 28).date()
+        period_name = f'Sep_{year}-Feb_{year + 1}'
+
+    # Get all transactions with receipts in this period
+    transactions = Transaction.query.filter(
+        Transaction.date >= start_date,
+        Transaction.date <= end_date,
+        Transaction.is_deleted == False
+    ).all()
+
+    receipts_to_export = []
+    for trans in transactions:
+        for receipt in trans.receipts:
+            if os.path.exists(receipt.file_path):
+                receipts_to_export.append({
+                    'receipt': receipt,
+                    'transaction': trans
+                })
+
+    if not receipts_to_export:
+        flash('No receipts found for this period', 'warning')
+        return redirect(url_for('index'))
+
+    # Create ZIP file
+    temp_dir = tempfile.mkdtemp()
+    zip_filename = f'Receipts_{period_name}.zip'
+    zip_path = os.path.join(temp_dir, zip_filename)
+
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Create index CSV
+            index_lines = ['Date,Description,Amount,Category,Receipt Filename']
+
+            for i, item in enumerate(receipts_to_export, 1):
+                receipt = item['receipt']
+                trans = item['transaction']
+
+                # Create unique filename in zip
+                ext = os.path.splitext(receipt.filename)[1]
+                zip_name = f"{trans.date.strftime('%Y%m%d')}_{i:03d}_{secure_filename(trans.description[:30])}{ext}"
+
+                # Add file to zip
+                zipf.write(receipt.file_path, zip_name)
+
+                # Add to index
+                cat_name = trans.category.name if trans.category else 'Uncategorized'
+                index_lines.append(
+                    f'{trans.date},{trans.description[:50]},{trans.amount},{cat_name},{zip_name}'
+                )
+
+            # Add index to zip
+            zipf.writestr('_index.csv', '\n'.join(index_lines))
+
+        return send_file(zip_path, as_attachment=True, download_name=zip_filename)
+    except Exception as e:
+        flash(f'Error exporting receipts: {str(e)}', 'error')
+        return redirect(url_for('index'))
+    finally:
+        # Cleanup temp dir after a delay (let send_file complete)
+        pass  # Flask handles cleanup of temp files
+
+
 @app.route('/duplicates')
 @login_required
 def duplicates():
@@ -491,11 +659,24 @@ def duplicates():
 
     duplicate_pairs = detect_duplicates(trans_list)
 
-    # Get actual transaction objects
+    # Get dismissed pairs to filter them out
+    dismissed = DismissedDuplicate.query.all()
+    dismissed_set = set()
+    for d in dismissed:
+        # Store both orderings
+        dismissed_set.add((d.transaction1_id, d.transaction2_id))
+        dismissed_set.add((d.transaction2_id, d.transaction1_id))
+
+    # Get actual transaction objects, filtering out dismissed pairs
     duplicates_data = []
     for idx1, idx2, score in duplicate_pairs:
         trans1 = all_transactions[idx1]
         trans2 = all_transactions[idx2]
+
+        # Skip if this pair was dismissed
+        if (trans1.id, trans2.id) in dismissed_set:
+            continue
+
         duplicates_data.append({
             'trans1': trans1,
             'trans2': trans2,
@@ -509,18 +690,38 @@ def duplicates():
 @login_required
 def mark_duplicate():
     """Mark a transaction as duplicate"""
-    data = request.get_json()
-    trans_id = data.get('transaction_id')
-    duplicate_of_id = data.get('duplicate_of_id')
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data received'}), 400
 
-    transaction = Transaction.query.get(trans_id)
-    if transaction:
+        trans_id = data.get('transaction_id')
+        duplicate_of_id = data.get('duplicate_of_id')
+
+        if not trans_id:
+            return jsonify({'success': False, 'error': 'Missing transaction_id'}), 400
+
+        transaction = Transaction.query.get(trans_id)
+        if not transaction:
+            return jsonify({'success': False, 'error': f'Transaction {trans_id} not found'}), 404
+
         transaction.is_duplicate = True
         transaction.duplicate_of_id = duplicate_of_id
         db.session.commit()
-        return jsonify({'success': True})
 
-    return jsonify({'success': False, 'error': 'Transaction not found'}), 404
+        # Verify the change was saved
+        db.session.refresh(transaction)
+        if transaction.is_duplicate:
+            return jsonify({
+                'success': True,
+                'message': f'Transaction {trans_id} marked as duplicate of {duplicate_of_id}'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save changes'}), 500
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/auto_mark_duplicates', methods=['POST'])
@@ -532,6 +733,34 @@ def auto_mark_all_duplicates():
         return jsonify({'success': True, 'count': count})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dismiss_duplicate', methods=['POST'])
+@login_required
+def dismiss_duplicate():
+    """Dismiss a duplicate pair (mark as 'not a duplicate')"""
+    data = request.get_json()
+    trans1_id = data.get('transaction1_id')
+    trans2_id = data.get('transaction2_id')
+
+    if not trans1_id or not trans2_id:
+        return jsonify({'success': False, 'error': 'Both transaction IDs required'}), 400
+
+    # Check if already dismissed
+    existing = DismissedDuplicate.query.filter(
+        ((DismissedDuplicate.transaction1_id == trans1_id) & (DismissedDuplicate.transaction2_id == trans2_id)) |
+        ((DismissedDuplicate.transaction1_id == trans2_id) & (DismissedDuplicate.transaction2_id == trans1_id))
+    ).first()
+
+    if not existing:
+        dismissed = DismissedDuplicate(
+            transaction1_id=trans1_id,
+            transaction2_id=trans2_id
+        )
+        db.session.add(dismissed)
+        db.session.commit()
+
+    return jsonify({'success': True})
 
 
 @app.route('/api/bulk_update_category', methods=['POST'])

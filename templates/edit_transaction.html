@@ -84,6 +84,42 @@
                    {{ transaction.statement.end_date.strftime('%d %b %Y') }}</p>
             </div>
         </div>
+
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-receipt"></i> Receipts</h5>
+                <a href="{{ url_for('add_receipt', id=transaction.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if transaction.receipts %}
+                    <ul class="list-group list-group-flush">
+                        {% for receipt in transaction.receipts %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <div>
+                                <a href="{{ url_for('view_receipt', id=receipt.id) }}" target="_blank" title="View receipt">
+                                    <i class="bi bi-file-earmark-{{ 'pdf' if receipt.file_type == 'pdf' else 'image' }}"></i>
+                                    {{ receipt.filename[:25] }}{% if receipt.filename|length > 25 %}...{% endif %}
+                                </a>
+                                {% if receipt.description %}
+                                <br><small class="text-muted">{{ receipt.description }}</small>
+                                {% endif %}
+                            </div>
+                            <form action="{{ url_for('delete_receipt', id=receipt.id) }}" method="POST" class="d-inline"
+                                  onsubmit="return confirm('Remove this receipt?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted mb-0"><small>No receipts attached</small></p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

@@ -33,16 +33,16 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="age" class="form-label">Your Age</label>
-                            <input type="number" class="form-control" id="age" value="0" min="0" max="120">
+                            <label for="dob" class="form-label">Date of Birth</label>
+                            <input type="date" class="form-control" id="dob" value="1991-04-30">
                             <small class="text-muted">
-                                Age rebates: 65+ and 75+
+                                Age: <strong id="calculatedAge">0</strong> years (rebates at 65+ and 75+)
                             </small>
                         </div>
 
                         <div class="mb-3">
                             <label for="medicalAid" class="form-label">Medical Aid Members</label>
-                            <input type="number" class="form-control" id="medicalAid" value="0" min="0" max="20">
+                            <input type="number" class="form-control" id="medicalAid" value="1" min="0" max="20">
                             <small class="text-muted">
                                 0 = None, 1 = Main member only, 2+ = Main + dependents
                             </small>
@@ -102,18 +102,18 @@
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>Income (R)</th>
-                                    <th>Rate</th>
+                                    <th>Taxable Income (R)</th>
+                                    <th>Rate of Tax</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td>0 - 237,100</td><td>18%</td></tr>
-                                <tr><td>237,101 - 370,500</td><td>26%</td></tr>
-                                <tr><td>370,501 - 512,800</td><td>31%</td></tr>
-                                <tr><td>512,801 - 673,000</td><td>36%</td></tr>
-                                <tr><td>673,001 - 857,900</td><td>39%</td></tr>
-                                <tr><td>857,901 - 1,817,000</td><td>41%</td></tr>
-                                <tr><td>1,817,001+</td><td>45%</td></tr>
+                                <tr><td>1 - 237,100</td><td>18% of taxable income</td></tr>
+                                <tr><td>237,101 - 370,500</td><td>R42,678 + 26% above R237,100</td></tr>
+                                <tr><td>370,501 - 512,800</td><td>R77,362 + 31% above R370,500</td></tr>
+                                <tr><td>512,801 - 673,000</td><td>R121,475 + 36% above R512,800</td></tr>
+                                <tr><td>673,001 - 857,900</td><td>R179,147 + 39% above R673,000</td></tr>
+                                <tr><td>857,901 - 1,817,000</td><td>R251,258 + 41% above R857,900</td></tr>
+                                <tr><td>1,817,001+</td><td>R644,489 + 45% above R1,817,000</td></tr>
                             </tbody>
                         </table>
                         <hr>
@@ -383,11 +383,14 @@ document.getElementById('taxForm').addEventListener('submit', async (e) => {
     document.getElementById('resultsSection').classList.add('d-none');
     document.getElementById('errorSection').classList.add('d-none');
 
+    // Calculate age from DOB
+    const age = calculateAge(document.getElementById('dob').value, document.getElementById('endDate').value);
+
     // Get form data
     const formData = {
         start_date: document.getElementById('startDate').value,
         end_date: document.getElementById('endDate').value,
-        age: document.getElementById('age').value,
+        age: age,
         medical_aid_members: document.getElementById('medicalAid').value,
         previous_payments: document.getElementById('previousPayments').value,
         home_office_sqm: document.getElementById('homeOfficeSqm').value,
@@ -570,6 +573,30 @@ function showError(message) {
     document.getElementById('errorSection').classList.remove('d-none');
 }
 
+// Calculate age from date of birth at a given reference date
+function calculateAge(dobStr, refDateStr) {
+    if (!dobStr) return 0;
+    const dob = new Date(dobStr);
+    const refDate = refDateStr ? new Date(refDateStr) : new Date();
+
+    let age = refDate.getFullYear() - dob.getFullYear();
+    const monthDiff = refDate.getMonth() - dob.getMonth();
+
+    // Adjust if birthday hasn't occurred yet this year
+    if (monthDiff < 0 || (monthDiff === 0 && refDate.getDate() < dob.getDate())) {
+        age--;
+    }
+    return Math.max(0, age);
+}
+
+// Update displayed age when DOB or end date changes
+function updateDisplayedAge() {
+    const dob = document.getElementById('dob').value;
+    const endDate = document.getElementById('endDate').value;
+    const age = calculateAge(dob, endDate);
+    document.getElementById('calculatedAge').textContent = age;
+}
+
 // Set default dates for first provisional period (Mar 1 - Aug 31)
 window.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
@@ -581,7 +608,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Update home office percentage when values change
     updateHomeOfficePercentage();
+
+    // Calculate and display age
+    updateDisplayedAge();
 });
+
+// Update age when DOB or end date changes
+document.getElementById('dob').addEventListener('change', updateDisplayedAge);
+document.getElementById('endDate').addEventListener('change', updateDisplayedAge);
 
 // Update home office percentage display dynamically
 function updateHomeOfficePercentage() {
