@@ -41,8 +41,7 @@ CATEGORIES = {
             'BOOTLEGGER', 'SHIFT ESPRESS', 'SHIFT ESPR',
             'FORESTERS ARM',
             'BOSSA',
-            'YOCO.*PINEH', 'YOCO.*CUTZF', 'YOCO.*FAIRV', 'YOCO.*MAITG', 'YOCO.*PURPO',
-            'YOCO.*KRIST', 'YOCO.*PINEL',
+            'OUMEUL BAKERY',
         ],
     },
     'education': {
@@ -127,12 +126,12 @@ CATEGORIES = {
     'municipal': {
         'name': 'Municipal',
         'type': 'business_expense',
-        'patterns': ['CITY OF CAPE TOWN', 'EASYPAY 081907422748'],
+        'patterns': ['CITY OF CAPE TOWN', 'EASYPAY'],
     },
     'office_equipment': {
         'name': 'Office Equipment',
         'type': 'business_expense',
-        'patterns': ['TAKEALO.*T', 'TAKEALOT', 'PNA PINELANDS', 'ROZPRINT'],
+        'patterns': ['PNA PINELANDS'],
     },
     'retirement_other': {
         'name': 'Other Retirement',
@@ -153,7 +152,7 @@ CATEGORIES = {
         'name': 'Professional Services',
         'type': 'business_expense',
         'patterns': [
-            'SARS', 'PROV TAX', 'SBSA RCP',
+            'SARS.*PAYMENT', 'SARS.*PROV', 'SARS.*IRP', 'PROV TAX', 'SBSA RCP',
             'PERSONAL TAX SERVIC',
             'SHEET SOLVED',
         ],
@@ -167,12 +166,13 @@ CATEGORIES = {
         'name': 'Technology/Software',
         'type': 'business_expense',
         'patterns': [
-            'GOOGLE GSUITE', 'GSUITE', 'GOOGLE ONE',
+            'GOOGLE GSUITE', 'GSUITE', 'GOOGLE ONE', 'GOOGLE WORKSPACE',
             'MSFT', 'MICROSOFT',
             'CLAUDE.AI',
             'RENDER.COM',
             'GODADDY', 'DNH\\*GODADDY',
             'PAYFAST.*TOPC', 'TOP CODER',
+            'ADOBE',
         ],
     },
     'travel_accommodation': {
@@ -210,6 +210,9 @@ CATEGORIES = {
             'APPLE.COM', 'ITUNE',
             'SABC TV',
             'PLAYSTATION', 'PLAYSTATIONNETWORK',
+            'NUMETRO', 'STER.*KINEKOR', 'CINEMA',
+            'KIRSTENBOSCH', 'BOTANICAL',
+            'HELDERBERG PLAAS',
         ],
     },
     'fuel': {
@@ -238,7 +241,7 @@ CATEGORIES = {
     'home_construction': {
         'name': 'Home Construction/Renovation',
         'type': 'personal_expense',
-        'patterns': ['VALIDUS'],
+        'patterns': ['VALIDUS', 'AFRIPOOLS'],
     },
     'kids_school': {
         'name': 'Kids School',
@@ -252,12 +255,14 @@ CATEGORIES = {
             'RESTAURANT', 'STEERS', 'NANDOS', 'KFC', 'PIZZA', 'DEBONAIRS',
             'WIMPY', 'OCEAN BASKET', 'ROCOMAMAS', 'SUSHI', 'MUGG.*BEAN',
             'VIDA.*CAFFE', 'CAFE', 'DELI', 'BISTRO', 'EATERY',
+            'SPUR', 'TASHAS', 'STIR CRAZY', 'PEREGRINE FARM',
+            'STODELS', 'UTAHSPUR', 'CINCINNATI SPU', 'TABBS',
         ],
     },
     'personal_care': {
         'name': 'Personal Care',
         'type': 'personal_expense',
-        'patterns': ['SALON', 'BARBER', 'HAIR', 'SPA', 'BEAUTY', 'NAIL', 'MASSAGE', 'SKINCARE'],
+        'patterns': ['SALON', 'BARBER', 'HAIR', 'SPA', 'BEAUTY', 'NAIL', 'MASSAGE', 'SKINCARE', 'CUTZF'],
     },
     'personal_other': {
         'name': 'Personal/Family Payments',
@@ -271,7 +276,7 @@ CATEGORIES = {
     'recreation': {
         'name': 'Recreation Equipment',
         'type': 'personal_expense',
-        'patterns': ['WONDERLAND', 'PITKIN CYCLES', 'SPORTSMANS WAREHOUSE'],
+        'patterns': ['WONDERLAND', 'PITKINCYCLES', 'PITKIN CYCLES', 'SPORTSMANS WAREHOUSE'],
     },
     'savings_investments': {
         'name': 'Savings/Investments',
@@ -282,10 +287,13 @@ CATEGORIES = {
         'name': 'Shopping',
         'type': 'personal_expense',
         'patterns': [
+            'TAKEALOT', 'TAKEALO',
             'AE HOWARD CEN', 'HOWARD CENTRE', 'ADVANCE CANAL',
-            'CONSTANTIA UI', 'BUILDERS SUNNI', 'PITKIN CYCLES',
+            'CONSTANTIA UI', 'BUILDERS SUNNI',
             'PETWORLD', 'ABSOLUTE PETS', 'FREEDOM ADVEN', 'BARGAIN BOO',
             'CLICKS', 'SPECSAVERS', 'BWH CITY', 'THE CRAZY S',
+            'OUTDOORWARE', 'PINELANDS VIL', 'BUILD IT', 'KOODOO',
+            'PNP EXP', 'CAPE TOWN FIRE',
         ],
     },
     'vehicle': {
@@ -301,10 +309,16 @@ CATEGORIES = {
             'MIDAS', 'TIGER WHEEL', 'SUPA QUICK', 'EXHAUST', 'WINDSCREEN',
             'LICENSE RENEWAL', 'VEHICLE LICENSE', 'E-TOLL', 'SANRAL', 'N1 CITY MOTOR',
             'AUTOZONE', 'GOLDWAGEN', 'PANEL BEATER',
+            'COCT TRAF', 'TRAFFIC',
         ],
     },
 
     # EXCLUDED (not expenses, ignore these)
+    'tax_refund': {
+        'name': 'Tax Refund (Excluded)',
+        'type': 'excluded',
+        'patterns': ['SARS.*MAGTAPE', 'SARS.*CREDIT', 'SARS.*REFUND'],
+    },
     'bond_payment': {
         'name': 'Bond Payment (Excluded)',
         'type': 'excluded',
@@ -377,9 +391,18 @@ def categorize_transaction(description, amount=None, db_rules=None):
                 return (CATEGORIES['banking_fees']['name'], 1.0)
             return (CATEGORIES['income']['name'], 1.0)
 
-    # Check all other hardcoded categories
+    # Check excluded patterns first (to catch things like SARS refunds before SARS payments)
     for cat_key, cat_info in CATEGORIES.items():
-        if cat_info['type'] == 'income':
+        if cat_info['type'] != 'excluded':
+            continue
+
+        for pattern in cat_info['patterns']:
+            if _match_pattern(pattern, description_upper):
+                return (cat_info['name'], 1.0)
+
+    # Check all other hardcoded categories (business and personal expenses)
+    for cat_key, cat_info in CATEGORIES.items():
+        if cat_info['type'] in ('income', 'excluded'):
             continue  # Already handled above
 
         for pattern in cat_info['patterns']:

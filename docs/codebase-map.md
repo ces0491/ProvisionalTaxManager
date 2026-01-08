@@ -25,7 +25,7 @@ ProvisionalTaxManager/
 ├── templates/             # Jinja2 HTML templates
 ├── tests/                 # Test suite
 ├── docs/                  # Documentation
-├── instance/              # Flask instance folder (database)
+├── instance/              # Flask instance folder
 └── uploads/               # Uploaded PDF statements
 ```
 
@@ -109,7 +109,9 @@ mypy app.py            # Type checking
 
 ### Database Reset
 ```bash
-rm instance/database.db    # Delete database
+# Database location is configured in .env (DATABASE_URL)
+# Default: C:/Users/.../AppData/Local/ProvisionalTaxManager/tax_data.db
+# Delete the database file, then restart the app to recreate
 python app.py              # Recreate on startup
 # Re-run seed scripts
 ```

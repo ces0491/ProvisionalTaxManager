@@ -177,7 +177,7 @@ transaction categorization, and tax report generation.
 
 - Go to **Tax Calculator** from the navigation
 - Select date range (e.g., Mar 1 - Aug 31 for first provisional)
-- Enter your age (for rebate calculation)
+- Date of birth is used for automatic age-based rebate calculation (65+, 75+)
 - Enter medical aid members (for tax credits)
 - Enter previous tax payments if applicable
 - Click **Calculate Tax** to see:
