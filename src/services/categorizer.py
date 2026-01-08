@@ -152,7 +152,6 @@ CATEGORIES = {
         'name': 'Professional Services',
         'type': 'business_expense',
         'patterns': [
-            'SARS.*PAYMENT', 'SARS.*PROV', 'SARS.*IRP', 'PROV TAX', 'SBSA RCP',
             'PERSONAL TAX SERVIC',
             'SHEET SOLVED',
         ],
@@ -199,6 +198,14 @@ CATEGORIES = {
             'MR PRICE', 'MRPRICE', 'ACKERMANS', 'JET STORE', 'EDGARS', 'TRUWORTHS',
             'FOSCHINI', 'MARKHAM', 'ZARA', 'H&M', 'COTTON ON', 'CAPE UNION',
             'SPORTSCENE', 'TOTALSPORTS', 'DUE SOUTH', 'SHOES', 'FOOTWEAR',
+        ],
+    },
+    'credit_repayments': {
+        'name': 'Credit Repayments',
+        'type': 'personal_expense',
+        'patterns': [
+            'SBSA RCP', 'REVOLVING CREDIT', 'RCP PAYMENT',
+            'CREDIT CARD PAYMENT', 'CC PAYMENT',
         ],
     },
     'entertainment_personal': {
@@ -318,6 +325,11 @@ CATEGORIES = {
         'name': 'Tax Refund (Excluded)',
         'type': 'excluded',
         'patterns': ['SARS.*MAGTAPE', 'SARS.*CREDIT', 'SARS.*REFUND'],
+    },
+    'tax_payment': {
+        'name': 'Tax Payment (Excluded)',
+        'type': 'excluded',
+        'patterns': ['SARS.*PAYMENT', 'SARS.*PROV', 'SARS.*IRP', 'PROV TAX', 'SARS.*PENALTY'],
     },
     'bond_payment': {
         'name': 'Bond Payment (Excluded)',
