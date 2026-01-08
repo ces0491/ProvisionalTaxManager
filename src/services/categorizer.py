@@ -13,97 +13,26 @@ CATEGORIES = {
         'patterns': ['PRECISE DIGITAL', 'PRECISE DIGITA'],
     },
 
-    # BUSINESS EXPENSES
-    'interest_mortgage': {
-        'name': 'Interest (Mortgage)',
+    # BUSINESS EXPENSES - Alphabetical order
+    'advertising_marketing': {
+        'name': 'Advertising/Marketing',
         'type': 'business_expense',
-        'patterns': ['SYSTEM INTEREST DEBIT', 'INTEREST DEBIT'],
+        'patterns': ['FACEBOOK ADS', 'GOOGLE ADS', 'LINKEDIN', 'MARKETING'],
     },
-    'retirement_10x': {
-        'name': 'Retirement (10X)',
+    'startup_costs': {
+        'name': 'Business Start-up Costs',
         'type': 'business_expense',
-        'patterns': ['10XRA COL', '10X'],
+        'patterns': ['CIPC', 'COMPANY REGISTRATION'],
     },
-    'retirement_other': {
-        'name': 'Other Retirement',
+    'capital_equipment': {
+        'name': 'Capital Equipment',
         'type': 'business_expense',
-        'patterns': ['OM UNITTRU', 'OLD MUTUAL INVEST', 'OLDGM.*INVEST'],
+        'patterns': ['APPLE STORE', 'INCREDIBLE CONNECTION', 'COMPUTER', 'LAPTOP'],
     },
-    'medical_aid': {
-        'name': 'Medical Aid',
+    'cleaning': {
+        'name': 'Cleaning',
         'type': 'business_expense',
-        'patterns': ['DISC PREM', 'MEDICAL AID CONTRIBUTION', 'DISCOVERY'],
-    },
-    'medical_fees': {
-        'name': 'Medical Fees',
-        'type': 'business_expense',
-        'patterns': ['DR MALCOL', 'SPECSAVERS', 'CLICKS PINELA'],
-    },
-    'education': {
-        'name': 'Education (UCT)',
-        'type': 'business_expense',
-        'patterns': ['PAYU.*UC', 'UNIVERSITY OF', 'QUALIFYD', 'PAYFAST.*QUALI'],
-    },
-    'internet': {
-        'name': 'Internet (Afrihost)',
-        'type': 'business_expense',
-        'patterns': ['AFRIHOST'],
-    },
-    'phone_data': {
-        'name': 'Phone/Data',
-        'type': 'business_expense',
-        'patterns': ['MTN', 'MTN PREPAID', 'MTN SP'],
-    },
-    'technology_software': {
-        'name': 'Technology/Software',
-        'type': 'business_expense',
-        'patterns': [
-            'GOOGLE GSUITE', 'GSUITE', 'GOOGLE ONE',
-            'MSFT', 'MICROSOFT',
-            'CLAUDE.AI',
-            'RENDER.COM',
-            'GODADDY', 'DNH\\*GODADDY',
-            'PAYFAST.*TOPC', 'TOP CODER',
-        ],
-    },
-    'office_equipment': {
-        'name': 'Office Equipment',
-        'type': 'business_expense',
-        'patterns': ['TAKEALO.*T', 'TAKEALOT', 'PNA PINELANDS', 'ROZPRINT'],
-    },
-    'maintenance': {
-        'name': 'Maintenance',
-        'type': 'business_expense',
-        'patterns': [
-            'POINT GARDEN',
-            'LIQUID RAIN', 'JOYCE THINDWA',
-            'TRIP ELECTRICAL',
-            'FIREWORX',
-            'DRAIN UNBLOCK',
-            'ABSOLUTE FENCING',
-            'CITY OF CAPE TOWN BUILDING', 'CITY BUILDING',
-            'WOODENSCAPES', 'LIVEWIRE SYSTEMS',
-            'DONALD BEKKER',
-        ],
-    },
-    'municipal': {
-        'name': 'Municipal',
-        'type': 'business_expense',
-        'patterns': ['CITY OF CAPE TOWN', 'EASYPAY 081907422748'],
-    },
-    'insurance': {
-        'name': 'Insurance',
-        'type': 'business_expense',
-        'patterns': ['DISCINSURE', 'DISCLIFE', 'INSURANCE PREMIUM'],
-    },
-    'professional_services': {
-        'name': 'Professional Services',
-        'type': 'business_expense',
-        'patterns': [
-            'SARS', 'PROV TAX', 'SBSA RCP',
-            'PERSONAL TAX SERVIC',
-            'SHEET SOLVED',
-        ],
+        'patterns': ['CLEANING SERVICE', 'DOMESTIC'],
     },
     'coffee_meals': {
         'name': 'Coffee/Meals (Business)',
@@ -115,6 +44,16 @@ CATEGORIES = {
             'YOCO.*PINEH', 'YOCO.*CUTZF', 'YOCO.*FAIRV', 'YOCO.*MAITG', 'YOCO.*PURPO',
             'YOCO.*KRIST', 'YOCO.*PINEL',
         ],
+    },
+    'education': {
+        'name': 'Education (UCT)',
+        'type': 'business_expense',
+        'patterns': ['PAYU.*UC', 'UNIVERSITY OF', 'QUALIFYD', 'PAYFAST.*QUALI'],
+    },
+    'entertainment_business': {
+        'name': 'Entertainment (Business)',
+        'type': 'business_expense',
+        'patterns': [],  # Populated via manual categorization or rules
     },
     'banking_fees': {
         'name': 'Fees/Bank charges',
@@ -140,89 +79,126 @@ CATEGORIES = {
             'OVERLIMIT FEE',
         ],
     },
-    'printing': {
-        'name': 'Printing',
+    'insurance': {
+        'name': 'Insurance',
         'type': 'business_expense',
-        'patterns': ['ROZPRINT'],
+        'patterns': ['DISCINSURE', 'DISCLIFE', 'INSURANCE PREMIUM'],
     },
-    'advertising_marketing': {
-        'name': 'Advertising/Marketing',
+    'interest_mortgage': {
+        'name': 'Interest (Mortgage)',
         'type': 'business_expense',
-        'patterns': ['FACEBOOK ADS', 'GOOGLE ADS', 'LINKEDIN', 'MARKETING'],
+        'patterns': ['SYSTEM INTEREST DEBIT', 'INTEREST DEBIT'],
+    },
+    'internet': {
+        'name': 'Internet (Afrihost)',
+        'type': 'business_expense',
+        'patterns': ['AFRIHOST'],
     },
     'legal_fees': {
         'name': 'Legal Fees',
         'type': 'business_expense',
         'patterns': ['ATTORNEY', 'LEGAL', 'LAW FIRM', 'ADVOCATE'],
     },
-    'entertainment_business': {
-        'name': 'Entertainment (Business)',
+    'maintenance': {
+        'name': 'Maintenance',
         'type': 'business_expense',
-        'patterns': [],  # Populated via manual categorization or rules
+        'patterns': [
+            'POINT GARDEN',
+            'LIQUID RAIN', 'JOYCE THINDWA',
+            'TRIP ELECTRICAL',
+            'FIREWORX',
+            'DRAIN UNBLOCK',
+            'ABSOLUTE FENCING',
+            'CITY OF CAPE TOWN BUILDING', 'CITY BUILDING',
+            'WOODENSCAPES', 'LIVEWIRE SYSTEMS',
+            'DONALD BEKKER',
+        ],
+    },
+    'medical_aid': {
+        'name': 'Medical Aid',
+        'type': 'business_expense',
+        'patterns': ['DISC PREM', 'MEDICAL AID CONTRIBUTION', 'DISCOVERY'],
+    },
+    'medical_fees': {
+        'name': 'Medical Fees',
+        'type': 'business_expense',
+        'patterns': ['DR MALCOL', 'SPECSAVERS', 'CLICKS PINELA'],
+    },
+    'municipal': {
+        'name': 'Municipal',
+        'type': 'business_expense',
+        'patterns': ['CITY OF CAPE TOWN', 'EASYPAY 081907422748'],
+    },
+    'office_equipment': {
+        'name': 'Office Equipment',
+        'type': 'business_expense',
+        'patterns': ['TAKEALO.*T', 'TAKEALOT', 'PNA PINELANDS', 'ROZPRINT'],
+    },
+    'retirement_other': {
+        'name': 'Other Retirement',
+        'type': 'business_expense',
+        'patterns': ['OM UNITTRU', 'OLD MUTUAL INVEST', 'OLDGM.*INVEST'],
+    },
+    'phone_data': {
+        'name': 'Phone/Data',
+        'type': 'business_expense',
+        'patterns': ['MTN', 'MTN PREPAID', 'MTN SP'],
+    },
+    'printing': {
+        'name': 'Printing',
+        'type': 'business_expense',
+        'patterns': ['ROZPRINT'],
+    },
+    'professional_services': {
+        'name': 'Professional Services',
+        'type': 'business_expense',
+        'patterns': [
+            'SARS', 'PROV TAX', 'SBSA RCP',
+            'PERSONAL TAX SERVIC',
+            'SHEET SOLVED',
+        ],
+    },
+    'retirement_10x': {
+        'name': 'Retirement (10X)',
+        'type': 'business_expense',
+        'patterns': ['10XRA COL', '10X'],
+    },
+    'technology_software': {
+        'name': 'Technology/Software',
+        'type': 'business_expense',
+        'patterns': [
+            'GOOGLE GSUITE', 'GSUITE', 'GOOGLE ONE',
+            'MSFT', 'MICROSOFT',
+            'CLAUDE.AI',
+            'RENDER.COM',
+            'GODADDY', 'DNH\\*GODADDY',
+            'PAYFAST.*TOPC', 'TOP CODER',
+        ],
     },
     'travel_accommodation': {
         'name': 'Travel/Accommodation',
         'type': 'business_expense',
         'patterns': ['AIRBNB', 'BOOKING.COM', 'HOTELS', 'GUEST HOUSE', 'LODGE'],
     },
-    'capital_equipment': {
-        'name': 'Capital Equipment',
-        'type': 'business_expense',
-        'patterns': ['APPLE STORE', 'INCREDIBLE CONNECTION', 'COMPUTER', 'LAPTOP'],
-    },
     'uniforms_workwear': {
         'name': 'Uniforms/Workwear',
         'type': 'business_expense',
         'patterns': [],  # Populated via manual categorization
     },
-    'cleaning': {
-        'name': 'Cleaning',
-        'type': 'business_expense',
-        'patterns': ['CLEANING SERVICE', 'DOMESTIC'],
-    },
-    'startup_costs': {
-        'name': 'Business Start-up Costs',
-        'type': 'business_expense',
-        'patterns': ['CIPC', 'COMPANY REGISTRATION'],
-    },
 
-    # PERSONAL EXPENSES (Non-deductible)
-    'vehicle': {
-        'name': 'Vehicle/Transport',
+    # PERSONAL EXPENSES (Non-deductible) - Alphabetical order
+    'cash_withdrawal': {
+        'name': 'Cash Withdrawal',
         'type': 'personal_expense',
-        'patterns': ['CARTRACK', 'ENGEN', 'C\\*BP PINELAND', 'ACSA', 'UBER', 'SBSAVAFNO.*DEBICHECK'],
+        'patterns': ['CASH WITHDRAWAL', 'ATM WITHDRAWAL', 'CASH.*ATM', 'AUTOBANK CASH'],
     },
-    'kids_school': {
-        'name': 'Kids School',
-        'type': 'personal_expense',
-        'patterns': ['KARRI'],
-    },
-    'home_construction': {
-        'name': 'Home Construction/Renovation',
-        'type': 'personal_expense',
-        'patterns': ['VALIDUS'],
-    },
-    'groceries': {
-        'name': 'Groceries/Personal Shopping',
+    'clothing': {
+        'name': 'Clothing',
         'type': 'personal_expense',
         'patterns': [
-            'CHECKERS', 'WOOLWORTHS', 'TOPS SUNRISE',
-            'MCD PINELANDS', 'SPUR', 'TASHAS', 'BK GRAND', 'FORESTERS ARM',
-            'KRISPY KREME', 'OUMEUL BAKERY', 'KNEAD PANORAM', 'BROWNS CANAL',
-            'THE GOAT SHED', 'AE HOWARD CEN', 'HOWARD CENTRE', 'ADVANCE CANAL',
-            'CONSTANTIA UI', 'PNP CRP', 'BUILDERS SUNNI', 'PITKIN CYCLES',
-            'PETWORLD', 'ABSOLUTE PETS', 'FREEDOM ADVEN', 'BARGAIN BOO',
-            'CLICKS', 'SPECSAVERS', 'BWH CITY', 'THE CRAZY S',
-            'ASARA WINES', 'WINE', 'LIQUOR',
-        ],
-    },
-    'personal_other': {
-        'name': 'Personal/Family Payments',
-        'type': 'personal_expense',
-        'patterns': [
-            'JACKIE TOBIAS', 'CO TOBIAS', 'CESAIRE TOBIAS',
-            'INVESTEC BANK LTD JOLION',
-            'KM FACTORY',
+            'MR PRICE', 'MRPRICE', 'ACKERMANS', 'JET STORE', 'EDGARS', 'TRUWORTHS',
+            'FOSCHINI', 'MARKHAM', 'ZARA', 'H&M', 'COTTON ON', 'CAPE UNION',
+            'SPORTSCENE', 'TOTALSPORTS', 'DUE SOUTH', 'SHOES', 'FOOTWEAR',
         ],
     },
     'entertainment_personal': {
@@ -236,25 +212,38 @@ CATEGORIES = {
             'PLAYSTATION', 'PLAYSTATIONNETWORK',
         ],
     },
+    'fuel': {
+        'name': 'Fuel',
+        'type': 'personal_expense',
+        'patterns': [
+            'SHELL', 'CALTEX', 'SASOL', 'TOTAL GARAGE', 'BP GARAGE',
+            'PETROL', 'DIESEL', 'FUEL', 'FILLING STATION',
+        ],
+    },
+    'groceries': {
+        'name': 'Groceries',
+        'type': 'personal_expense',
+        'patterns': [
+            'CHECKERS', 'WOOLWORTHS', 'TOPS SUNRISE', 'PNP CRP',
+            'MCD PINELANDS', 'SPUR', 'TASHAS', 'BK GRAND', 'FORESTERS ARM',
+            'KRISPY KREME', 'OUMEUL BAKERY', 'KNEAD PANORAM', 'BROWNS CANAL',
+            'THE GOAT SHED', 'ASARA WINES', 'WINE', 'LIQUOR',
+        ],
+    },
     'gym': {
         'name': 'Gym',
         'type': 'personal_expense',
         'patterns': ['VIRGIN ACT', 'O M GYM', 'OM GYM', 'OLDGM.*DEBIT TRANSFER', 'OLD MUTUAL.*GYM'],
     },
-    'recreation': {
-        'name': 'Recreation Equipment',
+    'home_construction': {
+        'name': 'Home Construction/Renovation',
         'type': 'personal_expense',
-        'patterns': ['WONDERLAND', 'PITKIN CYCLES', 'SPORTSMANS WAREHOUSE'],
+        'patterns': ['VALIDUS'],
     },
-    'personal_care': {
-        'name': 'Personal Care',
+    'kids_school': {
+        'name': 'Kids School',
         'type': 'personal_expense',
-        'patterns': ['SALON', 'BARBER', 'HAIR', 'SPA', 'BEAUTY', 'NAIL', 'MASSAGE', 'SKINCARE'],
-    },
-    'cash_withdrawal': {
-        'name': 'Cash Withdrawal',
-        'type': 'personal_expense',
-        'patterns': ['CASH WITHDRAWAL', 'ATM WITHDRAWAL', 'CASH.*ATM', 'AUTOBANK CASH'],
+        'patterns': ['KARRI'],
     },
     'meals_personal': {
         'name': 'Meals (Personal)',
@@ -265,22 +254,44 @@ CATEGORIES = {
             'VIDA.*CAFFE', 'CAFE', 'DELI', 'BISTRO', 'EATERY',
         ],
     },
-    'clothing': {
-        'name': 'Clothing',
+    'personal_care': {
+        'name': 'Personal Care',
+        'type': 'personal_expense',
+        'patterns': ['SALON', 'BARBER', 'HAIR', 'SPA', 'BEAUTY', 'NAIL', 'MASSAGE', 'SKINCARE'],
+    },
+    'personal_other': {
+        'name': 'Personal/Family Payments',
         'type': 'personal_expense',
         'patterns': [
-            'MR PRICE', 'MRPRICE', 'ACKERMANS', 'JET STORE', 'EDGARS', 'TRUWORTHS',
-            'FOSCHINI', 'MARKHAM', 'ZARA', 'H&M', 'COTTON ON', 'CAPE UNION',
-            'SPORTSCENE', 'TOTALSPORTS', 'DUE SOUTH', 'SHOES', 'FOOTWEAR',
+            'JACKIE TOBIAS', 'CO TOBIAS', 'CESAIRE TOBIAS',
+            'INVESTEC BANK LTD JOLION',
+            'KM FACTORY',
         ],
     },
-    'fuel': {
-        'name': 'Fuel',
+    'recreation': {
+        'name': 'Recreation Equipment',
+        'type': 'personal_expense',
+        'patterns': ['WONDERLAND', 'PITKIN CYCLES', 'SPORTSMANS WAREHOUSE'],
+    },
+    'savings_investments': {
+        'name': 'Savings/Investments',
+        'type': 'personal_expense',
+        'patterns': ['EASY EQUITIES', 'EASYEQUITIES', 'FNB SAVINGS', 'SAVINGS POCKET', 'UNIT TRUST'],
+    },
+    'shopping': {
+        'name': 'Shopping',
         'type': 'personal_expense',
         'patterns': [
-            'SHELL', 'CALTEX', 'SASOL', 'TOTAL GARAGE', 'BP GARAGE',
-            'PETROL', 'DIESEL', 'FUEL', 'FILLING STATION',
+            'AE HOWARD CEN', 'HOWARD CENTRE', 'ADVANCE CANAL',
+            'CONSTANTIA UI', 'BUILDERS SUNNI', 'PITKIN CYCLES',
+            'PETWORLD', 'ABSOLUTE PETS', 'FREEDOM ADVEN', 'BARGAIN BOO',
+            'CLICKS', 'SPECSAVERS', 'BWH CITY', 'THE CRAZY S',
         ],
+    },
+    'vehicle': {
+        'name': 'Vehicle/Transport',
+        'type': 'personal_expense',
+        'patterns': ['CARTRACK', 'ENGEN', 'C\\*BP PINELAND', 'ACSA', 'UBER', 'SBSAVAFNO.*DEBICHECK'],
     },
     'vehicle_other': {
         'name': 'Vehicle (Other)',

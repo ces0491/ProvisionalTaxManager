@@ -257,7 +257,7 @@ def transactions():
         query = query.filter(Transaction.date <= datetime.strptime(end_date, '%Y-%m-%d').date())
 
     transactions = query.order_by(Transaction.date.desc()).paginate(page=page, per_page=per_page)
-    categories = Category.query.all()
+    categories = Category.query.order_by(Category.name).all()
 
     return render_template('transactions.html',
                          transactions=transactions,
@@ -292,7 +292,7 @@ def edit_transaction(id):
                                end_date=end_date if end_date else None,
                                page=page))
 
-    categories = Category.query.all()
+    categories = Category.query.order_by(Category.name).all()
 
     # Get filter parameters from query string to pass to template
     filter_params = {
@@ -363,7 +363,7 @@ def add_transaction():
         flash('Manual transaction added successfully', 'success')
         return redirect(url_for('transactions'))
 
-    categories = Category.query.all()
+    categories = Category.query.order_by(Category.name).all()
     return render_template('add_transaction.html', categories=categories)
 
 
@@ -389,7 +389,7 @@ def split_transaction(id):
                 f'(R{abs(parent.amount)})',
                 'error'
             )
-            categories = Category.query.all()
+            categories = Category.query.order_by(Category.name).all()
             return render_template(
                 'split_transaction.html',
                 transaction=parent,
@@ -444,7 +444,7 @@ def split_transaction(id):
                                end_date=end_date if end_date else None,
                                page=page))
 
-    categories = Category.query.all()
+    categories = Category.query.order_by(Category.name).all()
 
     # Get filter parameters from query string to pass to template
     filter_params = {
