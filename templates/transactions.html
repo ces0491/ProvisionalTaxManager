@@ -125,6 +125,9 @@
                     <label class="form-label small mb-1">Category</label>
                     <select name="category_id" class="form-select form-select-sm">
                         <option value="">All Categories</option>
+                        <option value="uncategorized" {% if request.args.get('category_id') == 'uncategorized' %}selected{% endif %}>
+                            ⚠️ Uncategorized
+                        </option>
                         {% for cat in categories %}
                         <option value="{{ cat.id }}" {% if request.args.get('category_id')|int == cat.id %}selected{% endif %}>
                             {{ cat.name }}
@@ -271,21 +274,21 @@
             <ul class="pagination">
                 {% if transactions.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('transactions', page=transactions.prev_num) }}">Previous</a>
+                    <a class="page-link" href="{{ url_for('transactions', page=transactions.prev_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Previous</a>
                 </li>
                 {% endif %}
 
                 {% for page_num in transactions.iter_pages() %}
                     {% if page_num %}
                         <li class="page-item {% if page_num == transactions.page %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('transactions', page=page_num) }}">{{ page_num }}</a>
+                            <a class="page-link" href="{{ url_for('transactions', page=page_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">{{ page_num }}</a>
                         </li>
                     {% endif %}
                 {% endfor %}
 
                 {% if transactions.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('transactions', page=transactions.next_num) }}">Next</a>
+                    <a class="page-link" href="{{ url_for('transactions', page=transactions.next_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Next</a>
                 </li>
                 {% endif %}
             </ul>

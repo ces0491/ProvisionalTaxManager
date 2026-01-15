@@ -244,9 +244,11 @@ def transactions():
     query = Transaction.query.filter_by(is_deleted=False, is_duplicate=False)
 
     # Filters
-    category_id = request.args.get('category_id', type=int)
-    if category_id:
-        query = query.filter_by(category_id=category_id)
+    category_id = request.args.get('category_id')
+    if category_id == 'uncategorized':
+        query = query.filter(Transaction.category_id == None)
+    elif category_id:
+        query = query.filter_by(category_id=int(category_id))
 
     start_date = request.args.get('start_date')
     if start_date:

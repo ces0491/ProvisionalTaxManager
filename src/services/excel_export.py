@@ -21,8 +21,8 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     transactions = Transaction.query.filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        not Transaction.is_deleted,
-        not Transaction.is_duplicate
+        Transaction.is_deleted == False,
+        Transaction.is_duplicate == False
     ).order_by(Transaction.date).all()
 
     # Organize by month
@@ -245,7 +245,7 @@ def write_table8_business_summary(ws, start_row, trans_by_month, months):
     row += 1
 
     # Category rows
-    from categorizer import CATEGORIES
+    from src.services.categorizer import CATEGORIES
     business_categories = [cat['name'] for cat in CATEGORIES.values() if cat['type'] == 'business_expense']
 
     for cat_name in business_categories:
@@ -305,7 +305,7 @@ def write_table9_personal_summary(ws, start_row, trans_by_month, months):
     row += 1
 
     # Personal categories
-    from categorizer import CATEGORIES
+    from src.services.categorizer import CATEGORIES
     personal_categories = [cat['name'] for cat in CATEGORIES.values() if cat['type'] == 'personal_expense']
 
     for cat_name in personal_categories:
