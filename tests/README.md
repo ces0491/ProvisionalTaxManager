@@ -6,13 +6,13 @@ Comprehensive test suite for the Provisional Tax Manager application.
 
 | Module | Tests | Status |
 |--------|-------|--------|
-| Tax Calculator | 12 | ✅ 100% |
+| Tax Calculator | 14 | ✅ 100% |
 | Categorizer | 17 | ✅ 100% |
 | PDF Parser | 8 | ✅ 100% |
 | Flask Routes | 26 | ✅ 100% |
 | Database Models | 16 | ✅ 100% |
 
-**Total: 79 tests passing**
+**Total: 81 tests passing**
 
 ## Running Tests
 
@@ -43,6 +43,15 @@ pytest --cov=. --cov-report=html
 | `test_routes.py` | Authentication, CRUD, splitting, API endpoints |
 | `test_models.py` | Model constraints, relationships, foreign keys |
 | `conftest.py` | Shared fixtures |
+
+## Test database isolation
+
+`conftest.py` sets `DATABASE_URL` to a throwaway temp-file SQLite database
+**before importing the app**. This is essential: Flask-SQLAlchemy binds the
+engine at `db.init_app()` (import time), so a config override applied later is
+ignored — without the pre-import override, the fixtures' `db.drop_all()` would
+run against the real development database. CSRF and the rate limiter are also
+disabled for tests.
 
 ## Fixtures
 

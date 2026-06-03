@@ -12,7 +12,7 @@ transaction categorization, and tax report generation.
   business rules
 - **Duplicate Detection**: Identifies and merges duplicate transactions
   from overlapping statements with persistent dismissal tracking
-- **Receipt Management**: Attach and view receipt scans/PDFs linked to transactions
+- **Receipt Management**: Upload and view receipt scans/PDFs linked to transactions
 - **Manual Editing**: Edit, recategorize, or delete transactions as needed
 - **Manual Transactions**: Add cash expenses or income not on statements
 - **Transaction Splitting**: Split mixed purchases (like Takealot) into
@@ -21,12 +21,15 @@ transaction categorization, and tax report generation.
   automatic detection (PayPal, Stripe, clients, etc.)
 - **Flexible Categorization**: Database-driven rules for all transaction
   categories with priority and regex support
-- **Tax Calculator**: Calculate provisional tax liability using SARS 2025/2026
-  tax tables with rebates and credits
+- **Tax Calculator**: Calculate provisional tax liability using database-driven
+  SARS tax tables (2025/2026 and 2026/2027) with rebates and credits. The first
+  provisional period pays 50% of the annual estimate; the second pays the balance
 - **Excel Export**: Generates comprehensive 11-table tax reports in native
   Excel format
 - **Tax Periods**: Supports both provisional tax periods (Mar-Aug, Sep-Feb)
 - **Extrapolation**: Automatically projects incomplete months for current period
+- **Security**: CSRF protection on all forms and APIs, rate-limited login, and
+  hardened session cookies
 
 ## Setup
 
@@ -57,6 +60,9 @@ transaction categorization, and tax report generation.
    - `FLASK_SECRET_KEY`: Random secret key for sessions
    - `AUTH_PASSWORD`: Password for logging into the app
    - `DATABASE_URL`: Leave as sqlite for local development
+   - `SESSION_COOKIE_SECURE` (optional): set to `true` in production (HTTPS);
+     leave unset for local HTTP development
+   - `FLASK_DEBUG` (optional): set to `true` to enable the debugger locally
 
 4. **Initialize database:**
 
@@ -111,9 +117,11 @@ transaction categorization, and tax report generation.
 
 - Go to **Transactions** to see all parsed transactions
 - Use filters to narrow down by:
-  - Category
-  - Date range
-  - Account type
+  - Category (including "Uncategorized")
+  - Tax year (anchors the quick-range presets)
+  - Quick ranges: this/last month, last 3/6 months, provisional periods, full tax year
+  - A specific month, or a custom start/end date range
+- Use **Clear filters** to reset
 
 ### 3. Handle Duplicates
 
@@ -176,16 +184,20 @@ transaction categorization, and tax report generation.
 ### 7. Tax Calculator
 
 - Go to **Tax Calculator** from the navigation
-- Select date range (e.g., Mar 1 - Aug 31 for first provisional)
+- Choose the **Provisional Period** (1st: Mar-Aug, or 2nd: Sep-Feb) — this
+  auto-fills the period dates, which you can still adjust
 - Date of birth is used for automatic age-based rebate calculation (65+, 75+)
 - Enter medical aid members (for tax credits)
-- Enter previous tax payments if applicable
+- For the second period, enter previous tax payments (the first provisional
+  payment plus any PAYE)
 - Click **Calculate Tax** to see:
   - Period income and expenses
-  - Annual estimate (extrapolated)
+  - Annual estimate (extrapolated to 12 months)
   - Estimated annual tax liability
-  - **Provisional payment amount due**
+  - **Provisional payment due** — 50% of the annual estimate for the 1st period,
+    or the remaining balance for the 2nd
   - Expense breakdown by category
+- The rate-table panel shows the SARS rates for the tax year of the period's end date
 
 ### 8. Export Tax Report
 
@@ -211,7 +223,7 @@ Format: `PnLMarAugforAug2025.xlsx` or `PnLSepFebforFeb2026.xlsx`
 
 ## Testing
 
-The application includes a comprehensive test suite with 79 tests covering:
+The application includes a comprehensive test suite with 81 tests covering:
 
 - Tax calculations and SARS tax tables
 - Transaction categorization and rules

@@ -33,7 +33,7 @@ ProvisionalTaxManager/
 
 | File | Purpose | Key Items |
 |------|---------|-----------|
-| `app.py` | Flask routes, handlers | All routes (`/`, `/upload`, `/transactions`, `/reports`, etc.) |
+| `app.py` | Flask routes, handlers | Routes (`/`, `/upload`, `/transactions`, `/reports`, `/api/*`); CSRF protection + login rate limiting |
 | `src/config.py` | Configuration | `Config` class |
 | `src/database/models.py` | Database models | `Transaction`, `Category`, `Account`, `TaxYear`, `VATConfig` |
 
@@ -120,7 +120,7 @@ python app.py              # Recreate on startup
 
 | Feature | File(s) | Notes |
 |---------|---------|-------|
-| New tax year | `scripts/seed_tax_tables.py` | Copy, update values, run |
+| New tax year | `scripts/seed_tax_tables.py` | Add a `seed_<start_year>_tax_year()` function (year = start calendar year), call it from `__main__`, run |
 | New VAT rate | `scripts/seed_vat_config.py` | Add VATConfig record with dates |
 | New category | `app.py` or database | Via `/income_sources` UI or seed script |
 | New route/page | `app.py`, `templates/` | Follow existing patterns |
