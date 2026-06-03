@@ -24,8 +24,8 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     transactions = Transaction.query.filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.is_deleted == False,
-        Transaction.is_duplicate == False
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.is_duplicate == False  # noqa: E712
     ).order_by(Transaction.date).all()
 
     # Organize by month

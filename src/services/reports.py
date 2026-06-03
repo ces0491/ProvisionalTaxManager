@@ -213,8 +213,8 @@ def get_available_tax_years(db_session, Transaction):
         func.min(Transaction.date),
         func.max(Transaction.date)
     ).filter(
-        Transaction.is_deleted == False,
-        Transaction.is_duplicate == False
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.is_duplicate == False  # noqa: E712
     ).first()
 
     if not result or not result[0]:
@@ -249,8 +249,8 @@ def get_transactions_for_year(Transaction, year):
     start_date, end_date = get_tax_year_dates(year)
 
     return Transaction.query.filter(
-        Transaction.is_deleted == False,
-        Transaction.is_duplicate == False,
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.is_duplicate == False,  # noqa: E712
         Transaction.date >= start_date,
         Transaction.date <= end_date
     ).all()

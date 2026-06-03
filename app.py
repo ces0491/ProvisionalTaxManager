@@ -3,7 +3,6 @@ from functools import wraps
 import calendar
 import hmac
 import os
-import shutil
 import tempfile
 import uuid
 import zipfile
@@ -21,7 +20,7 @@ from src.services.pdf_parser import BankStatementParser, detect_duplicates
 from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
 from src.services.excel_export import generate_tax_export
 from src.services.tax_calculator import calculate_tax_from_transactions
-from src.services.reports import aggregate_transactions, get_available_years, get_transactions_for_year, MONTHS
+from src.services.reports import aggregate_transactions, get_available_years, get_transactions_for_year
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -280,7 +279,7 @@ def transactions():
     # Filters
     category_id = request.args.get('category_id')
     if category_id == 'uncategorized':
-        query = query.filter(Transaction.category_id == None)
+        query = query.filter(Transaction.category_id == None)  # noqa: E711
     elif category_id:
         query = query.filter_by(category_id=int(category_id))
 
@@ -655,7 +654,7 @@ def export_receipts():
     transactions = Transaction.query.filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.is_deleted == False
+        Transaction.is_deleted == False  # noqa: E712
     ).all()
 
     receipts_to_export = []

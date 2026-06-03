@@ -618,9 +618,7 @@ def detect_duplicates(transactions_list, date_tolerance_days=2):
     slightly between statement formats (e.g., transaction date vs posting date).
     Returns list of (transaction1_index, transaction2_index, similarity_score)
     """
-    from datetime import timedelta
     duplicates = []
-    date_tolerance = timedelta(days=date_tolerance_days)
 
     for i, trans1 in enumerate(transactions_list):
         for j, trans2 in enumerate(transactions_list[i+1:], start=i+1):
