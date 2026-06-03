@@ -34,8 +34,8 @@ class SATaxCalculator:
     TERTIARY_REBATE_2025 = 3145
 
     # FALLBACK: Medical aid tax credits (2025/2026)
-    MEDICAL_AID_CREDIT_MAIN = 364  # Per month for main member
-    MEDICAL_AID_CREDIT_DEPENDENT = 246  # Per month per first dependent
+    MEDICAL_AID_CREDIT_MAIN = 364  # Per month for main member (2025/2026)
+    MEDICAL_AID_CREDIT_DEPENDENT = 364  # Per month for first dependent (same rate as main member)
     MEDICAL_AID_CREDIT_ADDITIONAL = 246  # Per month per additional dependent
 
     def __init__(self, tax_year: int = 2025, db_session=None):
@@ -165,7 +165,8 @@ class SATaxCalculator:
         period_months: int,
         age: int = 0,
         medical_aid_members: int = 0,
-        previous_payments: Decimal = Decimal('0')
+        previous_payments: Decimal = Decimal('0'),
+        provisional_period: str = 'first'
     ) -> Dict[str, Any]:
         """
         Calculate provisional tax payment required
@@ -176,7 +177,9 @@ class SATaxCalculator:
             period_months: Number of months in the period (usually 6)
             age: Taxpayer age
             medical_aid_members: Number of medical aid members
-            previous_payments: Tax already paid in current year
+            previous_payments: Tax already paid in current year (PAYE, and for
+                the second period the first provisional payment already made)
+            provisional_period: 'first' (due end Aug) or 'second' (due end Feb)
 
         Returns:
             Dictionary with provisional tax calculation
@@ -192,22 +195,29 @@ class SATaxCalculator:
             annual_estimate, age, medical_aid_members
         )
 
-        # Provisional tax is estimated annual tax minus payments already made
-        provisional_payment = max(
-            0, annual_tax_calc['tax_liability'] - previous_payments
-        )
+        estimated_annual_tax = annual_tax_calc['tax_liability']
 
-        # For first provisional (August): pay full estimated amount
-        # For second provisional (February): pay balance
-        # Basic estimate assumes 50/50 split if no previous payments
+        # SARS provisional tax (IRP6):
+        #   First period  (due end Aug): pay 50% of the estimated annual tax,
+        #                  less employees' tax / credits for the period.
+        #   Second period (due end Feb): pay the full estimated annual tax,
+        #                  less the first provisional payment and any PAYE.
+        # `previous_payments` carries those offsets.
+        if provisional_period == 'second':
+            period_liability = estimated_annual_tax
+        else:
+            period_liability = estimated_annual_tax / 2
+
+        provisional_payment = max(0, period_liability - previous_payments)
 
         return {
             'period_months': period_months,
+            'provisional_period': provisional_period,
             'period_income': period_income,
             'period_expenses': period_expenses,
             'period_profit': period_profit,
             'annual_estimate': annual_tax_calc['taxable_income'],
-            'estimated_annual_tax': annual_tax_calc['tax_liability'],
+            'estimated_annual_tax': estimated_annual_tax,
             'previous_payments': previous_payments,
             'provisional_payment': Decimal(str(provisional_payment)),
             'effective_rate': annual_tax_calc['effective_rate'],
@@ -287,7 +297,8 @@ def calculate_tax_from_transactions(
     tax_year: Optional[int] = None,
     db_session=None,
     home_office_sqm: Optional[Decimal] = None,
-    house_total_sqm: Optional[Decimal] = None
+    house_total_sqm: Optional[Decimal] = None,
+    provisional_period: str = 'first'
 ) -> Dict[str, Any]:
     """
     Calculate tax liability from transaction data
@@ -307,6 +318,8 @@ def calculate_tax_from_transactions(
         db_session: Database session for loading tax tables
         home_office_sqm: Home office size in square meters (default: 22)
         house_total_sqm: Total house size in square meters (default: 268)
+        provisional_period: 'first' (due end Aug, pays 50%) or 'second'
+            (due end Feb, pays the balance)
 
     Returns:
         Dictionary with comprehensive tax calculation including breakdown
@@ -321,10 +334,12 @@ def calculate_tax_from_transactions(
         else:
             tax_year = period_end.year - 1
 
-    # Calculate period months
+    # Calculate period months: the inclusive count of calendar months the
+    # period spans, e.g. 1 Mar - 31 Aug is 6 months (not 5). Used to annualize
+    # the period profit, so an off-by-one here directly distorts the estimate.
     months_diff = (
         (period_end.year - period_start.year) * 12 +
-        (period_end.month - period_start.month)
+        (period_end.month - period_start.month) + 1
     )
     period_months = max(1, months_diff)
 
@@ -434,7 +449,8 @@ def calculate_tax_from_transactions(
         period_months=period_months,
         age=age,
         medical_aid_members=medical_aid_members,
-        previous_payments=previous_payments
+        previous_payments=previous_payments,
+        provisional_period=provisional_period
     )
 
     # Add detailed breakdowns for transparency

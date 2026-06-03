@@ -131,12 +131,50 @@ class TestSATaxCalculator:
             period_months=6,
             age=40,
             medical_aid_members=0,
-            previous_payments=Decimal('50000')
+            previous_payments=Decimal('50000'),
+            provisional_period='second'
         )
 
         # Should subtract previous payments
         assert result['previous_payments'] == Decimal('50000')
         assert result['provisional_payment'] < result['estimated_annual_tax']
+
+    def test_first_provisional_pays_half(self):
+        """First provisional period should be 50% of the estimated annual tax."""
+        calc = SATaxCalculator()
+        kwargs = dict(
+            period_income=Decimal('300000'),
+            period_expenses=Decimal('100000'),
+            period_months=6,
+            age=40,
+            medical_aid_members=1,
+            previous_payments=Decimal('0'),
+        )
+        first = calc.calculate_provisional_tax(provisional_period='first', **kwargs)
+        second = calc.calculate_provisional_tax(provisional_period='second', **kwargs)
+
+        # Same annual estimate, but first period pays half of it (no prior payments)
+        assert first['estimated_annual_tax'] == second['estimated_annual_tax']
+        assert second['provisional_payment'] == first['estimated_annual_tax']
+        expected_half = (first['estimated_annual_tax'] / 2)
+        assert abs(first['provisional_payment'] - expected_half) < Decimal('0.01')
+
+    def test_period_months_inclusive(self):
+        """A full 6-month provisional period should annualize by x2, not x2.4."""
+        result = calculate_tax_from_transactions(
+            transactions=[{
+                'date': date(2026, 5, 1), 'description': 'Fee',
+                'amount': Decimal('600000'), 'category': 'Income',
+                'category_type': 'income',
+            }],
+            period_start=date(2026, 3, 1),
+            period_end=date(2026, 8, 31),
+            age=40,
+            medical_aid_members=1,
+        )
+        assert result['period_months'] == 6
+        # 600k over 6 months annualizes to 1.2m (not 1.44m)
+        assert result['annual_estimate'] == Decimal('1200000.0')
 
     def test_tax_brackets_2025(self):
         """Test that 2025/2026 tax brackets are applied correctly"""
@@ -177,7 +215,8 @@ class TestCalculateTaxFromTransactions:
 
         # With sample income of 10,000 and expenses of 5,099
         # Net profit should be 4,901 for the period
-        assert result['period_months'] == 5
+        # 1 Mar - 31 Aug spans 6 calendar months (inclusive)
+        assert result['period_months'] == 6
         assert result['period_income'] > 0
         assert result['period_expenses'] > 0
         # Annual tax should be calculated on annualized profit
