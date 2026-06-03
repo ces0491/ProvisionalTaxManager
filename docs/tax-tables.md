@@ -120,6 +120,7 @@ tax_result = calculate_tax_from_transactions(
 ```
 
 If `tax_year` is not specified, it's derived from `period_end`:
+
 - Transactions in Mar-Dec belong to that year's tax year
 - Transactions in Jan-Feb belong to previous year's tax year
 
@@ -140,6 +141,6 @@ with app.app_context():
 
 ## SARS References
 
-- **Tax Tables**: https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/
+- **Tax Tables**: <https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/>
 - **Budget Speech**: Published in February each year
 - **Effective Date**: March 1st of each year

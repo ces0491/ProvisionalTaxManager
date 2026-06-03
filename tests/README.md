@@ -12,7 +12,7 @@ Comprehensive test suite for the Provisional Tax Manager application.
 | Flask Routes | 26 | ✅ 100% |
 | Database Models | 16 | ✅ 100% |
 
-**Total: 81 tests passing**
+**Total:** 81 tests passing
 
 ## Running Tests
 

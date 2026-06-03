@@ -4,7 +4,7 @@ Quick reference for navigating the Provisional Tax Manager codebase.
 
 ## Project Structure
 
-```
+```text
 ProvisionalTaxManager/
 ├── app.py                  # Flask application and routes
 ├── src/                    # Source code package
@@ -51,6 +51,7 @@ ProvisionalTaxManager/
 ## Database Models
 
 **Core Models**:
+
 1. `Account` - Bank accounts
 2. `Statement` - Uploaded statements
 3. `Transaction` - Individual transactions
@@ -82,12 +83,14 @@ ProvisionalTaxManager/
 ## Common Tasks
 
 ### Run Application
+
 ```bash
 python app.py
 # Visit http://localhost:5000
 ```
 
 ### Run Tests
+
 ```bash
 pytest                      # All tests
 pytest tests/test_routes.py # Specific file
@@ -95,12 +98,14 @@ pytest -v                   # Verbose
 ```
 
 ### Seed Database
+
 ```bash
 python scripts/seed_tax_tables.py   # Tax tables
 python scripts/seed_vat_config.py   # VAT rates
 ```
 
 ### Code Quality
+
 ```bash
 ruff check .           # Linting
 ruff check . --fix     # Auto-fix
@@ -108,6 +113,7 @@ mypy app.py            # Type checking
 ```
 
 ### Database Reset
+
 ```bash
 # Database location is configured in .env (DATABASE_URL)
 # Default: C:/Users/.../AppData/Local/ProvisionalTaxManager/tax_data.db

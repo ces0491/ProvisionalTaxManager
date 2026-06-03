@@ -46,14 +46,16 @@ Categories have a `default_vat_rate` field:
 ### Standard-Rated (15%)
 
 **Amount Includes VAT** (most expenses):
-```
+
+```text
 Amount incl VAT: R1,150.00
 Amount excl VAT: R1,150.00 / 1.15 = R1,000.00
 VAT Amount: R150.00
 ```
 
 **Amount Excludes VAT** (sales/invoices):
-```
+
+```text
 Amount excl VAT: R1,000.00
 VAT Amount: R1,000.00 × 0.15 = R150.00
 Amount incl VAT: R1,150.00
@@ -62,7 +64,8 @@ Amount incl VAT: R1,150.00
 ### Zero-Rated (0%)
 
 Foreign income:
-```
+
+```text
 Amount: R100,000.00
 VAT: R0.00 (zero-rated export)
 Claimable input VAT: Yes (on related expenses)
@@ -91,26 +94,31 @@ summary = calculate_vat_summary(
 ## VAT Rates by Category
 
 ### Zero-Rated (0%)
+
 - Income (Foreign): Zero-rated exports
 - Basic Foods: Certain staples
 
 ### Standard-Rated (15%)
+
 - Technology/Software
 - Internet
 - Professional Services
 - Most Business Expenses
 
 ### Exempt (No VAT)
+
 - Financial Services: Bank fees, some insurance
 - Residential Rent
 
 ### No VAT
+
 - Medical Aid
 - Some international transactions
 
 ## Filing Periods
 
 6-monthly filing:
+
 - **Period 1**: January - June (due 25 July)
 - **Period 2**: July - December (due 25 January)
 
@@ -118,7 +126,7 @@ summary = calculate_vat_summary(
 
 VAT and Income Tax are separate calculations:
 
-```
+```text
 Transaction: -R1,150 (incl VAT)
 VAT (15%): -R150
 Amount excl VAT: -R1,000
@@ -169,6 +177,6 @@ db.session.commit()
 
 ## SARS Resources
 
-- **VAT Guide**: https://www.sars.gov.za/types-of-tax/value-added-tax/
-- **VAT Rates**: https://www.sars.gov.za/tax-rates/vat/vat-rates/
-- **eFiling**: https://www.sarsefiling.co.za
+- **VAT Guide**: <https://www.sars.gov.za/types-of-tax/value-added-tax/>
+- **VAT Rates**: <https://www.sars.gov.za/tax-rates/vat/vat-rates/>
+- **eFiling**: <https://www.sarsefiling.co.za>
