@@ -19,11 +19,18 @@ Represents a tax year (e.g., 2025/2026):
 
 | Field | Description |
 |-------|-------------|
-| `year` | 2025, 2026, etc. |
+| `year` | START calendar year of the tax year — `2025` == the 2025/2026 year, `2026` == the 2026/2027 year |
 | `description` | "2025/2026 Tax Year" |
 | `start_date` | March 1 |
 | `end_date` | February 28/29 |
 | `is_active` | Whether currently active |
+
+> **Year-numbering convention.** `TaxYear.year` and `SATaxCalculator.tax_year`
+> use the **start** calendar year: a period ending Feb 2026 resolves to
+> `year=2025` (the 2025/2026 tax year). Note this differs from the reports page
+> and the transactions filter, which label tax years by their **end** year
+> (e.g. "2026" there means the 2025/2026 year). Both render the unambiguous
+> "YYYY/YYYY" range in the UI.
 
 ### TaxBracket
 
@@ -58,34 +65,29 @@ Medical aid tax credits:
 
 ## Seeding Tax Tables
 
-### Current Tax Year
+### Seeded Tax Years
 
-The 2025/2026 tax tables are already seeded. To verify:
+The seed script populates both the **2025/2026** (`year=2025`) and **2026/2027**
+(`year=2026`) tax years. It is idempotent — each year is skipped if already
+present, so it is safe to re-run:
 
 ```bash
 python scripts/seed_tax_tables.py
 ```
 
+Source figures: [SARS rates of tax for individuals](https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/)
+and [SARS medical tax credit rates](https://www.sars.gov.za/tax-rates/medical-tax-credit-rates/).
+
+Medical scheme fees credit: the main member and the first dependant are
+credited at the **same** monthly rate (R364 for 2025/2026, R376 for 2026/2027);
+each further dependant is credited at the lower rate (R246 / R254).
+
 ### Adding Future Tax Years
 
-When SARS announces new tax tables (usually in February):
-
-1. Copy the seed script:
-   ```bash
-   cp scripts/seed_tax_tables.py scripts/seed_tax_tables_2026.py
-   ```
-
-2. Update the values:
-   - `year=2026`
-   - New brackets with thresholds and rates
-   - Updated rebate amounts
-   - Updated medical aid credit amounts
-   - Date ranges
-
-3. Run the script:
-   ```bash
-   python scripts/seed_tax_tables_2026.py
-   ```
+When SARS announces new tax tables (usually after the February Budget), add a
+`seed_<start_year>_tax_year()` function in `scripts/seed_tax_tables.py` modelled
+on the existing ones (remembering `year` is the **start** calendar year), call
+it from `__main__`, then re-run the script.
 
 ## Calculator Usage
 

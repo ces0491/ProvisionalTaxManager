@@ -84,11 +84,12 @@ def seed_2025_tax_year():
             )
             db.session.add(rebate)
 
-        # Add medical aid credits
+        # Add medical aid credits. Main member and first dependant are credited
+        # at the same rate (R364); each further dependant at R246.
         credits = [
             {'type': 'main', 'monthly_amount': 364,
              'description': 'Main member monthly credit'},
-            {'type': 'first_dependent', 'monthly_amount': 246,
+            {'type': 'first_dependent', 'monthly_amount': 364,
              'description': 'First dependent monthly credit'},
             {'type': 'additional', 'monthly_amount': 246,
              'description': 'Additional dependents monthly credit (each)'},
@@ -110,5 +111,105 @@ def seed_2025_tax_year():
         print(f"  - {len(credits)} medical aid credits")
 
 
+def seed_2026_tax_year():
+    """Seed 2026/2027 tax year data.
+
+    Source: SARS, 2027 tax year (1 March 2026 - 28 February 2027), published
+    25 February 2026.
+    https://www.sars.gov.za/tax-rates/income-tax/rates-of-tax-for-individuals/
+    https://www.sars.gov.za/tax-rates/medical-tax-credit-rates/
+
+    Note: this codebase stores TaxYear.year as the START calendar year, so the
+    SARS "2027 tax year" (1 Mar 2026 - 28 Feb 2027) is stored as year=2026.
+    """
+    with app.app_context():
+        db.create_all()
+
+        existing = TaxYear.query.filter_by(year=2026).first()
+        if existing:
+            print("2026 tax year already exists. Skipping...")
+            return
+
+        tax_year = TaxYear(
+            year=2026,
+            description='2026/2027 Tax Year',
+            start_date=date(2026, 3, 1),
+            end_date=date(2027, 2, 28),
+            is_active=True
+        )
+        db.session.add(tax_year)
+        db.session.flush()  # Get ID
+
+        # Add tax brackets (SARS 2027 tax year)
+        brackets = [
+            {'order': 1, 'min': 0, 'max': 245100, 'rate': 0.18, 'base': 0},
+            {'order': 2, 'min': 245100, 'max': 383100, 'rate': 0.26, 'base': 44118},
+            {'order': 3, 'min': 383100, 'max': 530200, 'rate': 0.31, 'base': 79998},
+            {'order': 4, 'min': 530200, 'max': 695800, 'rate': 0.36, 'base': 125599},
+            {'order': 5, 'min': 695800, 'max': 887000, 'rate': 0.39, 'base': 185215},
+            {'order': 6, 'min': 887000, 'max': 1878600, 'rate': 0.41, 'base': 259783},
+            {'order': 7, 'min': 1878600, 'max': None, 'rate': 0.45, 'base': 666339},
+        ]
+
+        for bracket_data in brackets:
+            bracket = TaxBracket(
+                tax_year_id=tax_year.id,
+                min_income=Decimal(str(bracket_data['min'])),
+                max_income=Decimal(str(bracket_data['max'])) if bracket_data['max'] else None,
+                rate=Decimal(str(bracket_data['rate'])),
+                base_tax=Decimal(str(bracket_data['base'])),
+                bracket_order=bracket_data['order']
+            )
+            db.session.add(bracket)
+
+        # Add rebates (SARS 2027 tax year)
+        rebates = [
+            {'type': 'primary', 'min_age': 0, 'amount': 17820,
+             'description': 'Primary rebate (all taxpayers)'},
+            {'type': 'secondary', 'min_age': 65, 'amount': 9765,
+             'description': 'Secondary rebate (65 years and older)'},
+            {'type': 'tertiary', 'min_age': 75, 'amount': 3249,
+             'description': 'Tertiary rebate (75 years and older)'},
+        ]
+
+        for rebate_data in rebates:
+            rebate = TaxRebate(
+                tax_year_id=tax_year.id,
+                rebate_type=rebate_data['type'],
+                min_age=rebate_data['min_age'],
+                amount=Decimal(str(rebate_data['amount'])),
+                description=rebate_data['description']
+            )
+            db.session.add(rebate)
+
+        # Add medical aid credits (SARS 2027 tax year). Main member and first
+        # dependant are credited at the same rate (R376); each further
+        # dependant at R254.
+        credits = [
+            {'type': 'main', 'monthly_amount': 376,
+             'description': 'Main member monthly credit'},
+            {'type': 'first_dependent', 'monthly_amount': 376,
+             'description': 'First dependent monthly credit'},
+            {'type': 'additional', 'monthly_amount': 254,
+             'description': 'Additional dependents monthly credit (each)'},
+        ]
+
+        for credit_data in credits:
+            credit = MedicalAidCredit(
+                tax_year_id=tax_year.id,
+                credit_type=credit_data['type'],
+                monthly_amount=Decimal(str(credit_data['monthly_amount'])),
+                description=credit_data['description']
+            )
+            db.session.add(credit)
+
+        db.session.commit()
+        print("Successfully seeded 2026/2027 tax year data")
+        print(f"  - {len(brackets)} tax brackets")
+        print(f"  - {len(rebates)} rebates")
+        print(f"  - {len(credits)} medical aid credits")
+
+
 if __name__ == '__main__':
     seed_2025_tax_year()
+    seed_2026_tax_year()
