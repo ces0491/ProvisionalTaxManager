@@ -9,6 +9,11 @@
         <p class="lead">Review and mark duplicate transactions from overlapping statement periods</p>
     </div>
     <div class="col-md-4 text-end">
+        <form action="{{ url_for('rescan_duplicates') }}" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-outline-primary me-1">
+                <i class="bi bi-arrow-repeat"></i> Re-scan All
+            </button>
+        </form>
         <button onclick="autoMarkExactDuplicates()" class="btn btn-primary">
             <i class="bi bi-lightning-fill"></i> Auto-Mark 100% Duplicates
         </button>

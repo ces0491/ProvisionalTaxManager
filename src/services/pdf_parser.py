@@ -611,32 +611,45 @@ class BankStatementParser:
         raise ValueError(f"Could not parse date: {date_str}")
 
 
-def detect_duplicates(transactions_list):
+def detect_duplicates(transactions_list, date_tolerance_days=2):
     """
-    Detect duplicate transactions across multiple statements
+    Detect duplicate transactions across multiple statements.
+    Allows a date tolerance to catch duplicates where posting dates differ
+    slightly between statement formats (e.g., transaction date vs posting date).
     Returns list of (transaction1_index, transaction2_index, similarity_score)
     """
+    from datetime import timedelta
     duplicates = []
+    date_tolerance = timedelta(days=date_tolerance_days)
 
     for i, trans1 in enumerate(transactions_list):
         for j, trans2 in enumerate(transactions_list[i+1:], start=i+1):
-            # Same date
-            if trans1['date'] == trans2['date']:
-                # Same amount
-                if trans1['amount'] == trans2['amount']:
-                    # Similar description (allow for minor differences)
-                    desc1 = trans1['description'].upper().strip()
-                    desc2 = trans2['description'].upper().strip()
+            # Same amount
+            if trans1['amount'] == trans2['amount']:
+                # Dates within tolerance
+                date_diff = abs((trans1['date'] - trans2['date']).days)
+                if date_diff > date_tolerance_days:
+                    continue
 
-                    if desc1 == desc2:
+                # Similar description (allow for minor differences)
+                desc1 = trans1['description'].upper().strip()
+                desc2 = trans2['description'].upper().strip()
+
+                if desc1 == desc2:
+                    if date_diff == 0:
                         duplicates.append((i, j, 1.0))  # Exact match
-                    elif desc1 in desc2 or desc2 in desc1:
-                        # If one description is very short (< 10 chars) or empty,
-                        # and it's contained in the other, treat as exact match
-                        # This handles cases where PDF parsing extracts different amounts of text
-                        if len(desc1) < 10 or len(desc2) < 10:
-                            duplicates.append((i, j, 1.0))  # Exact match
+                    else:
+                        duplicates.append((i, j, 0.9))  # Same desc/amount, close date
+                elif desc1 in desc2 or desc2 in desc1:
+                    # If one description is very short (< 10 chars) or empty,
+                    # and it's contained in the other, treat as exact match
+                    # This handles cases where PDF parsing extracts different amounts of text
+                    if len(desc1) < 10 or len(desc2) < 10:
+                        if date_diff == 0:
+                            duplicates.append((i, j, 1.0))
                         else:
-                            duplicates.append((i, j, 0.8))  # Partial match
+                            duplicates.append((i, j, 0.9))
+                    else:
+                        duplicates.append((i, j, 0.8))  # Partial match
 
     return duplicates
