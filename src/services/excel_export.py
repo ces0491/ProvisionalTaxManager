@@ -3,6 +3,9 @@ Excel export functionality - generates the 11-table tax report
 Based on provisional_tax_calc_system.md specifications
 """
 
+import os
+import tempfile
+
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from datetime import datetime
@@ -61,8 +64,8 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     # TABLE 11: Annual Summary for Tax Calculation
     row = write_table11_annual_summary(ws, row, trans_by_month, start_date, end_date)
 
-    # Save workbook
-    output_path = f'/tmp/{filename}'
+    # Save workbook to the OS temp directory (portable across Windows/Linux)
+    output_path = os.path.join(tempfile.gettempdir(), filename)
     wb.save(output_path)
     return output_path
 
