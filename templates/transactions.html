@@ -120,7 +120,7 @@
 
     <div class="row mt-2">
         <div class="col-md-12">
-            <form method="GET" class="row g-2">
+            <form method="GET" class="row g-2 align-items-end" id="filterForm">
                 <div class="col-md-3">
                     <label class="form-label small mb-1">Category</label>
                     <select name="category_id" class="form-select form-select-sm">
@@ -135,17 +135,44 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Tax year</label>
+                    <select name="tax_year" id="taxYear" class="form-select form-select-sm" title="Anchors the provisional-period and tax-year quick ranges below">
+                        {% for ty in tax_years %}
+                        <option value="{{ ty }}" {% if ty == selected_tax_year %}selected{% endif %}>
+                            {{ ty }} ({{ ty - 1 }}/{{ ty }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="col-md-3">
+                    <label class="form-label small mb-1">Quick range</label>
+                    <select id="quickRange" class="form-select form-select-sm" onchange="applyQuickRange(this.value)">
+                        <option value="">Custom / all dates</option>
+                        <option value="this_month">This month</option>
+                        <option value="last_month">Last month</option>
+                        <option value="last_3_months">Last 3 months</option>
+                        <option value="last_6_months">Last 6 months</option>
+                        <option value="first_provisional">1st provisional period (Mar–Aug)</option>
+                        <option value="second_provisional">2nd provisional period (Sep–Feb)</option>
+                        <option value="tax_year">Full tax year (Mar–Feb)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Or pick a month</label>
+                    <input type="month" id="monthPicker" class="form-control form-control-sm" onchange="applyMonth(this.value)">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small mb-1">Start Date</label>
-                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ request.args.get('start_date', '') }}">
+                    <input type="date" name="start_date" id="startDate" class="form-control form-control-sm" value="{{ request.args.get('start_date', '') }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small mb-1">End Date</label>
-                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ request.args.get('end_date', '') }}">
+                    <input type="date" name="end_date" id="endDate" class="form-control form-control-sm" value="{{ request.args.get('end_date', '') }}">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">&nbsp;</label>
-                    <button type="submit" class="btn btn-primary btn-sm w-100">Filter</button>
+                <div class="col-md-12 d-flex gap-2 mt-2">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="{{ url_for('transactions') }}" class="btn btn-outline-secondary btn-sm">Clear filters</a>
                 </div>
             </form>
         </div>
@@ -243,12 +270,12 @@
                                     <i class="bi bi-scissors"></i>
                                 </span>
                             {% endif %}
-                            <a href="{{ url_for('edit_transaction', id=trans.id, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), page=request.args.get('page', 1)) }}"
+                            <a href="{{ url_for('edit_transaction', id=trans.id, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), tax_year=request.args.get('tax_year'), page=request.args.get('page', 1)) }}"
                                class="btn btn-sm btn-outline-primary"
                                title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <a href="{{ url_for('split_transaction', id=trans.id, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), page=request.args.get('page', 1)) }}"
+                            <a href="{{ url_for('split_transaction', id=trans.id, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), tax_year=request.args.get('tax_year'), page=request.args.get('page', 1)) }}"
                                class="btn btn-sm btn-outline-warning"
                                title="Split into business/personal">
                                 <i class="bi bi-scissors"></i>
@@ -274,21 +301,21 @@
             <ul class="pagination">
                 {% if transactions.has_prev %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('transactions', page=transactions.prev_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Previous</a>
+                    <a class="page-link" href="{{ url_for('transactions', page=transactions.prev_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), tax_year=request.args.get('tax_year')) }}">Previous</a>
                 </li>
                 {% endif %}
 
                 {% for page_num in transactions.iter_pages() %}
                     {% if page_num %}
                         <li class="page-item {% if page_num == transactions.page %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('transactions', page=page_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">{{ page_num }}</a>
+                            <a class="page-link" href="{{ url_for('transactions', page=page_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), tax_year=request.args.get('tax_year')) }}">{{ page_num }}</a>
                         </li>
                     {% endif %}
                 {% endfor %}
 
                 {% if transactions.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="{{ url_for('transactions', page=transactions.next_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date')) }}">Next</a>
+                    <a class="page-link" href="{{ url_for('transactions', page=transactions.next_num, category_id=request.args.get('category_id'), start_date=request.args.get('start_date'), end_date=request.args.get('end_date'), tax_year=request.args.get('tax_year')) }}">Next</a>
                 </li>
                 {% endif %}
             </ul>
@@ -299,6 +326,82 @@
 
 {% block extra_js %}
 <script>
+    // --- Filter helpers: quick date ranges and month picker ---
+    function _pad(n) { return String(n).padStart(2, '0'); }
+    function _fmt(d) { return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+
+    // Calendar year in which the selected tax year began. SA tax year N runs
+    // 1 March (N-1) to end of February N, so it begins in year N-1.
+    function _taxYearStartYear() {
+        const ty = parseInt(document.getElementById('taxYear').value, 10);
+        return ty - 1;
+    }
+
+    function applyQuickRange(value) {
+        if (!value) return;
+        document.getElementById('monthPicker').value = '';
+        const today = new Date();
+        const m = today.getMonth();
+        const y = today.getFullYear();
+        let start, end;
+        switch (value) {
+            case 'this_month':
+                start = new Date(y, m, 1);
+                end = new Date(y, m + 1, 0);
+                break;
+            case 'last_month':
+                start = new Date(y, m - 1, 1);
+                end = new Date(y, m, 0);
+                break;
+            case 'last_3_months':
+                // Snap to month boundaries: first of the month two months back
+                // through the last day of the current month (3 calendar months).
+                start = new Date(y, m - 2, 1);
+                end = new Date(y, m + 1, 0);
+                break;
+            case 'last_6_months':
+                start = new Date(y, m - 5, 1);
+                end = new Date(y, m + 1, 0);
+                break;
+            case 'first_provisional': {
+                const sy = _taxYearStartYear();
+                start = new Date(sy, 2, 1);      // 1 March
+                end = new Date(sy, 7, 31);       // 31 August
+                break;
+            }
+            case 'second_provisional': {
+                const sy = _taxYearStartYear();
+                start = new Date(sy, 8, 1);      // 1 September
+                end = new Date(sy + 1, 2, 0);    // last day of February (handles leap years)
+                break;
+            }
+            case 'tax_year': {
+                const sy = _taxYearStartYear();
+                start = new Date(sy, 2, 1);      // 1 March
+                end = new Date(sy + 1, 2, 0);    // last day of February (handles leap years)
+                break;
+            }
+            default:
+                return;
+        }
+        document.getElementById('startDate').value = _fmt(start);
+        document.getElementById('endDate').value = _fmt(end);
+        document.getElementById('filterForm').submit();
+    }
+
+    function applyMonth(value) {
+        if (!value) return; // value is "YYYY-MM"
+        document.getElementById('quickRange').value = '';
+        const parts = value.split('-');
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10); // 1-indexed
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m, 0);
+        document.getElementById('startDate').value = _fmt(start);
+        document.getElementById('endDate').value = _fmt(end);
+        document.getElementById('filterForm').submit();
+    }
+
     // Set sticky table header position dynamically
     document.addEventListener('DOMContentLoaded', function() {
         const navbar = document.querySelector('.navbar');

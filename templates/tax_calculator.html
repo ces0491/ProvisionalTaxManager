@@ -17,6 +17,17 @@
                 <div class="card-body">
                     <form id="taxForm">
                         <div class="mb-3">
+                            <label for="provisionalPeriod" class="form-label">Provisional Period</label>
+                            <select class="form-select" id="provisionalPeriod">
+                                <option value="first">1st period (Mar–Aug, due end Aug) — pays 50%</option>
+                                <option value="second">2nd period (Sep–Feb, due end Feb) — pays balance</option>
+                            </select>
+                            <small class="text-muted">
+                                Sets the period dates and how the payment is derived.
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="startDate" class="form-label">Period Start Date</label>
                             <input type="date" class="form-control" id="startDate" required>
                             <small class="text-muted">
@@ -94,7 +105,7 @@
             <div class="card">
                 <div class="card-header bg-info text-white">
                     <h6 class="mb-0">
-                        <i class="bi bi-info-circle"></i> 2025/2026 Tax Rates
+                        <i class="bi bi-info-circle"></i> <span id="ratesCardTitle">Tax Rates</span>
                     </h6>
                 </div>
                 <div class="card-body">
@@ -106,21 +117,15 @@
                                     <th>Rate of Tax</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr><td>1 - 237,100</td><td>18% of taxable income</td></tr>
-                                <tr><td>237,101 - 370,500</td><td>R42,678 + 26% above R237,100</td></tr>
-                                <tr><td>370,501 - 512,800</td><td>R77,362 + 31% above R370,500</td></tr>
-                                <tr><td>512,801 - 673,000</td><td>R121,475 + 36% above R512,800</td></tr>
-                                <tr><td>673,001 - 857,900</td><td>R179,147 + 39% above R673,000</td></tr>
-                                <tr><td>857,901 - 1,817,000</td><td>R251,258 + 41% above R857,900</td></tr>
-                                <tr><td>1,817,001+</td><td>R644,489 + 45% above R1,817,000</td></tr>
+                            <tbody id="ratesTableBody">
+                                <tr><td colspan="2" class="text-muted">Loading tax rates…</td></tr>
                             </tbody>
                         </table>
                         <hr>
-                        <strong>Rebates:</strong><br>
-                        Primary: R17,235<br>
-                        Age 65+: R9,444<br>
-                        Age 75+: R3,145
+                        <div id="rebatesDisplay"></div>
+                        <p class="text-muted mb-0 mt-2" id="ratesNote">
+                            Rates follow the tax year of the period end date.
+                        </p>
                     </small>
                 </div>
             </div>
@@ -214,6 +219,7 @@
                             <h5 class="alert-heading">
                                 <i class="bi bi-cash-coin"></i> Provisional Payment Required
                             </h5>
+                            <p class="mb-0 small" id="provisionalPeriodLabel"></p>
                             <hr>
                             <div class="row">
                                 <div class="col-md-6">
@@ -394,7 +400,8 @@ document.getElementById('taxForm').addEventListener('submit', async (e) => {
         medical_aid_members: document.getElementById('medicalAid').value,
         previous_payments: document.getElementById('previousPayments').value,
         home_office_sqm: document.getElementById('homeOfficeSqm').value,
-        house_total_sqm: document.getElementById('houseTotalSqm').value
+        house_total_sqm: document.getElementById('houseTotalSqm').value,
+        provisional_period: document.getElementById('provisionalPeriod').value
     };
 
     try {
@@ -445,9 +452,16 @@ function displayResults(calc, transCount) {
         formatCurrency(calc.previous_payments);
     document.getElementById('provisionalPayment').textContent =
         formatCurrency(calc.provisional_payment);
+    document.getElementById('provisionalPeriodLabel').textContent =
+        calc.provisional_period === 'second'
+            ? '2nd period — full estimated annual tax, less previous payments'
+            : '1st period — 50% of estimated annual tax, less previous payments';
 
     // Tax year
     document.getElementById('taxYear').textContent = calc.tax_year + '/' + (calc.tax_year + 1);
+
+    // Keep the rate card in sync with the tax year actually used by the calc
+    loadTaxRates(calc.tax_year);
 
     // Transaction counts
     const counts = calc.transaction_counts;
@@ -573,6 +587,93 @@ function showError(message) {
     document.getElementById('errorSection').classList.remove('d-none');
 }
 
+// Format a whole-rand value with thousands separators (no decimals).
+function fmtInt(value) {
+    return parseFloat(value).toLocaleString('en-ZA', { maximumFractionDigits: 0 });
+}
+
+// Tax year (START-year convention, matching the TaxYear table and the
+// calculator) for a given period end date. SA tax year runs Mar–Feb, so a
+// period ending in Mar–Dec belongs to that calendar year; Jan–Feb belongs to
+// the previous one.
+function taxYearStartFromEndDate(endDateStr) {
+    if (!endDateStr) return null;
+    const parts = endDateStr.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10); // 1-indexed
+    return month >= 3 ? year : year - 1;
+}
+
+// Load the rate table that matches a tax year and render it into the card so
+// the displayed rates always reflect the tables used by the calculation.
+async function loadTaxRates(taxYear) {
+    const titleEl = document.getElementById('ratesCardTitle');
+    const bodyEl = document.getElementById('ratesTableBody');
+    const rebatesEl = document.getElementById('rebatesDisplay');
+    if (!taxYear) return;
+
+    titleEl.textContent = `${taxYear}/${taxYear + 1} Tax Rates`;
+
+    try {
+        const resp = await fetch(`/api/tax_rates/${taxYear}`);
+        const data = await resp.json();
+
+        if (!data.success) {
+            bodyEl.innerHTML = `<tr><td colspan="2" class="text-danger">${data.error || 'No tax tables found'}</td></tr>`;
+            rebatesEl.innerHTML = '';
+            return;
+        }
+
+        titleEl.textContent = `${data.label} Tax Rates`;
+
+        // Brackets. The "above R" threshold is the bracket's min_income (the
+        // value the calculator subtracts); the displayed lower bound is one
+        // rand higher so the printed ranges don't visually overlap.
+        let rows = '';
+        data.brackets.forEach((b, i) => {
+            const min = parseFloat(b.min_income);
+            const max = b.max_income !== null ? parseFloat(b.max_income) : null;
+            const rate = Math.round(parseFloat(b.rate) * 100);
+            const base = parseFloat(b.base_tax);
+
+            const lower = (i === 0) ? 1 : min + 1;
+            const rangeStr = (max !== null)
+                ? `${fmtInt(lower)} - ${fmtInt(max)}`
+                : `${fmtInt(lower)}+`;
+            const rateStr = (base === 0)
+                ? `${rate}% of taxable income`
+                : `R${fmtInt(base)} + ${rate}% above R${fmtInt(min)}`;
+
+            rows += `<tr><td>${rangeStr}</td><td>${rateStr}</td></tr>`;
+        });
+        bodyEl.innerHTML = rows;
+
+        // Rebates and medical credits.
+        const r = data.rebates;
+        let html = '<strong>Rebates:</strong><br>';
+        if (r.primary) html += `Primary: R${fmtInt(r.primary)}<br>`;
+        if (r.secondary) html += `Age 65+: R${fmtInt(r.secondary)}<br>`;
+        if (r.tertiary) html += `Age 75+: R${fmtInt(r.tertiary)}<br>`;
+
+        const c = data.medical_credits;
+        if (c.main || c.first_dependent || c.additional) {
+            html += '<br><strong>Medical credits (monthly):</strong><br>';
+            if (c.main) html += `Main member: R${fmtInt(c.main)}<br>`;
+            if (c.first_dependent) html += `First dependent: R${fmtInt(c.first_dependent)}<br>`;
+            if (c.additional) html += `Each additional: R${fmtInt(c.additional)}<br>`;
+        }
+        rebatesEl.innerHTML = html;
+    } catch (error) {
+        bodyEl.innerHTML = '<tr><td colspan="2" class="text-danger">Failed to load tax rates.</td></tr>';
+        rebatesEl.innerHTML = '';
+    }
+}
+
+// Refresh the rate card from the current period end date.
+function refreshRatesForEndDate() {
+    loadTaxRates(taxYearStartFromEndDate(document.getElementById('endDate').value));
+}
+
 // Calculate age from date of birth at a given reference date
 function calculateAge(dobStr, refDateStr) {
     if (!dobStr) return 0;
@@ -597,25 +698,47 @@ function updateDisplayedAge() {
     document.getElementById('calculatedAge').textContent = age;
 }
 
-// Set default dates for first provisional period (Mar 1 - Aug 31)
-window.addEventListener('DOMContentLoaded', () => {
-    const now = new Date();
-    const year = now.getFullYear();
+// Set the period dates for the selected provisional period. Anchors on the
+// year already in the start date (so switching periods stays in the same tax
+// year), otherwise the current calendar year.
+function applyProvisionalPeriodDates() {
+    const period = document.getElementById('provisionalPeriod').value;
+    const startEl = document.getElementById('startDate');
+    const baseYear = startEl.value
+        ? parseInt(startEl.value.split('-')[0], 10)
+        : new Date().getFullYear();
 
-    // Default to current year's first provisional period
-    document.getElementById('startDate').value = `${year}-03-01`;
-    document.getElementById('endDate').value = `${year}-08-31`;
+    let start, end;
+    if (period === 'second') {
+        start = `${baseYear}-09-01`;
+        const lastFeb = new Date(baseYear + 1, 2, 0).getDate(); // 28 or 29 (leap)
+        end = `${baseYear + 1}-02-${String(lastFeb).padStart(2, '0')}`;
+    } else {
+        start = `${baseYear}-03-01`;
+        end = `${baseYear}-08-31`;
+    }
+    startEl.value = start;
+    document.getElementById('endDate').value = end;
+    updateDisplayedAge();
+    refreshRatesForEndDate();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    // Default to the current year's first provisional period
+    applyProvisionalPeriodDates();
 
     // Update home office percentage when values change
     updateHomeOfficePercentage();
-
-    // Calculate and display age
-    updateDisplayedAge();
 });
+
+document.getElementById('provisionalPeriod').addEventListener('change', applyProvisionalPeriodDates);
 
 // Update age when DOB or end date changes
 document.getElementById('dob').addEventListener('change', updateDisplayedAge);
-document.getElementById('endDate').addEventListener('change', updateDisplayedAge);
+document.getElementById('endDate').addEventListener('change', () => {
+    updateDisplayedAge();
+    refreshRatesForEndDate();
+});
 
 // Update home office percentage display dynamically
 function updateHomeOfficePercentage() {

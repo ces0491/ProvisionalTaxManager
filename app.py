@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from functools import wraps
+import calendar
+import hmac
 import os
 import shutil
 import tempfile
@@ -9,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from src.config import Config
-from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule, Receipt, DismissedDuplicate
+from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule, Receipt, DismissedDuplicate, TaxYear
 from src.services.pdf_parser import BankStatementParser, detect_duplicates
 from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
 from src.services.excel_export import generate_tax_export
@@ -38,8 +40,9 @@ def login_required(f):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        password = request.form.get('password')
-        if password == app.config['AUTH_PASSWORD']:
+        password = request.form.get('password') or ''
+        # Constant-time comparison to avoid leaking the password via timing
+        if hmac.compare_digest(password, app.config['AUTH_PASSWORD']):
             session['logged_in'] = True
             flash('Logged in successfully', 'success')
             return redirect(url_for('index'))
@@ -69,17 +72,25 @@ def index():
         is_duplicate=False
     ).count()
 
+    # Current tax year (END-year convention) for the export shortcuts
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+
     return render_template('index.html',
                          statements=statements,
                          total_transactions=total_transactions,
-                         uncategorized=uncategorized)
+                         uncategorized=uncategorized,
+                         current_tax_year=current_tax_year)
 
 
 @app.route('/reports')
 @login_required
 def reports():
     """Financial reports - income and expenses by month and category"""
-    selected_year = request.args.get('year', datetime.now().year, type=int)
+    # Default to the current tax year (END-year convention: 2026 == 2025/2026).
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    selected_year = request.args.get('year', current_tax_year, type=int)
     years = get_available_years(db.session, Transaction)
     transactions = get_transactions_for_year(Transaction, selected_year)
 
@@ -98,8 +109,9 @@ def reports():
 def auto_mark_duplicates():
     """
     Automatically mark duplicate transactions.
-    - 100% matches: always mark as duplicate
-    - 80% matches: mark if from same account (different statement formats)
+    - 100% matches (same date, amount, description): always mark as duplicate
+    - 90% matches (close date, same amount/description): mark if same account
+    - 80% matches (partial description): mark if same account
     Returns count of duplicates marked
     """
     # Get all non-deleted, non-duplicate transactions
@@ -122,10 +134,10 @@ def auto_mark_duplicates():
         should_mark = False
 
         if score == 1.0:
-            # Exact match - always mark
+            # Exact match (same date, amount, description) - always mark
             should_mark = True
         elif score >= 0.8:
-            # Partial match - mark if same account (likely different statement format)
+            # Close-date or partial description match - mark if same account
             if trans1.statement.account_id == trans2.statement.account_id:
                 should_mark = True
 
@@ -261,9 +273,20 @@ def transactions():
     transactions = query.order_by(Transaction.date.desc()).paginate(page=page, per_page=per_page)
     categories = Category.query.order_by(Category.name).all()
 
+    # Tax years available for anchoring the quick-range presets. Always include
+    # the current tax year so it can be selected even with no transactions yet.
+    tax_years = get_available_years(db.session, Transaction)
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    if current_tax_year not in tax_years:
+        tax_years = sorted(set(tax_years) | {current_tax_year}, reverse=True)
+    selected_tax_year = request.args.get('tax_year', current_tax_year, type=int)
+
     return render_template('transactions.html',
                          transactions=transactions,
-                         categories=categories)
+                         categories=categories,
+                         tax_years=tax_years,
+                         selected_tax_year=selected_tax_year)
 
 
 @app.route('/transaction/<int:id>/edit', methods=['GET', 'POST'])
@@ -286,12 +309,14 @@ def edit_transaction(id):
         category_id = request.form.get('filter_category_id')
         start_date = request.form.get('filter_start_date')
         end_date = request.form.get('filter_end_date')
+        tax_year = request.form.get('filter_tax_year')
         page = request.form.get('filter_page', 1)
 
         return redirect(url_for('transactions',
                                category_id=category_id if category_id else None,
                                start_date=start_date if start_date else None,
                                end_date=end_date if end_date else None,
+                               tax_year=tax_year if tax_year else None,
                                page=page))
 
     categories = Category.query.order_by(Category.name).all()
@@ -301,6 +326,7 @@ def edit_transaction(id):
         'category_id': request.args.get('category_id', ''),
         'start_date': request.args.get('start_date', ''),
         'end_date': request.args.get('end_date', ''),
+        'tax_year': request.args.get('tax_year', ''),
         'page': request.args.get('page', 1)
     }
 
@@ -438,12 +464,14 @@ def split_transaction(id):
         category_id = request.form.get('filter_category_id')
         start_date = request.form.get('filter_start_date')
         end_date = request.form.get('filter_end_date')
+        tax_year = request.form.get('filter_tax_year')
         page = request.form.get('filter_page', 1)
 
         return redirect(url_for('transactions',
                                category_id=category_id if category_id else None,
                                start_date=start_date if start_date else None,
                                end_date=end_date if end_date else None,
+                               tax_year=tax_year if tax_year else None,
                                page=page))
 
     categories = Category.query.order_by(Category.name).all()
@@ -453,6 +481,7 @@ def split_transaction(id):
         'category_id': request.args.get('category_id', ''),
         'start_date': request.args.get('start_date', ''),
         'end_date': request.args.get('end_date', ''),
+        'tax_year': request.args.get('tax_year', ''),
         'page': request.args.get('page', 1)
     }
 
@@ -546,19 +575,25 @@ def delete_receipt(id):
 @login_required
 def export():
     """Export tax report to Excel"""
-    # Get tax period from request
+    # Get tax period from request. `year` is the tax year by END calendar year
+    # (e.g. 2026 == the 2025/2026 tax year), matching the reports page and
+    # transactions filter. The tax year runs 1 Mar (year-1) to end Feb (year).
     period_type = request.args.get('period', 'first')  # first or second
-    year = request.args.get('year', datetime.now().year, type=int)
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    year = request.args.get('year', current_tax_year, type=int)
+    start_year = year - 1
 
     # Determine date range
     if period_type == 'first':
-        start_date = datetime(year, 3, 1).date()
-        end_date = datetime(year, 8, 31).date()
-        filename = f'PnLMarAugforAug{year}.xlsx'
+        start_date = datetime(start_year, 3, 1).date()
+        end_date = datetime(start_year, 8, 31).date()
+        filename = f'PnLMarAugforAug{start_year}.xlsx'
     else:
-        start_date = datetime(year, 9, 1).date()
-        end_date = datetime(year + 1, 2, 28).date()  # TODO: Handle leap years
-        filename = f'PnLSepFebforFeb{year + 1}.xlsx'
+        last_feb = 29 if calendar.isleap(year) else 28
+        start_date = datetime(start_year, 9, 1).date()
+        end_date = datetime(year, 2, last_feb).date()
+        filename = f'PnLSepFebforFeb{year}.xlsx'
 
     # Generate Excel file
     try:
@@ -573,18 +608,24 @@ def export():
 @login_required
 def export_receipts():
     """Export all receipts for a period as a ZIP file with an index"""
+    # `year` is the tax year by END calendar year (2026 == 2025/2026), matching
+    # the export and reports pages. Tax year runs 1 Mar (year-1) to end Feb (year).
     period_type = request.args.get('period', 'first')
-    year = request.args.get('year', datetime.now().year, type=int)
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    year = request.args.get('year', current_tax_year, type=int)
+    start_year = year - 1
 
     # Determine date range
     if period_type == 'first':
-        start_date = datetime(year, 3, 1).date()
-        end_date = datetime(year, 8, 31).date()
-        period_name = f'Mar-Aug_{year}'
+        start_date = datetime(start_year, 3, 1).date()
+        end_date = datetime(start_year, 8, 31).date()
+        period_name = f'Mar-Aug_{start_year}'
     else:
-        start_date = datetime(year, 9, 1).date()
-        end_date = datetime(year + 1, 2, 28).date()
-        period_name = f'Sep_{year}-Feb_{year + 1}'
+        last_feb = 29 if calendar.isleap(year) else 28
+        start_date = datetime(start_year, 9, 1).date()
+        end_date = datetime(year, 2, last_feb).date()
+        period_name = f'Sep_{start_year}-Feb_{year}'
 
     # Get all transactions with receipts in this period
     transactions = Transaction.query.filter(
@@ -686,6 +727,18 @@ def duplicates():
         })
 
     return render_template('duplicates.html', duplicates=duplicates_data)
+
+
+@app.route('/rescan-duplicates', methods=['POST'])
+@login_required
+def rescan_duplicates():
+    """Re-scan all transactions for duplicates"""
+    marked_count = auto_mark_duplicates()
+    if marked_count > 0:
+        flash(f'Found and marked {marked_count} duplicate transaction(s).', 'success')
+    else:
+        flash('No new duplicates found.', 'info')
+    return redirect(url_for('duplicates'))
 
 
 @app.route('/api/mark_duplicate', methods=['POST'])
@@ -837,6 +890,7 @@ def calculate_tax():
     age = int(data.get('age', 0))
     medical_aid_members = int(data.get('medical_aid_members', 0))
     previous_payments = Decimal(data.get('previous_payments', '0'))
+    provisional_period = 'second' if data.get('provisional_period') == 'second' else 'first'
 
     # Home office parameters (optional - uses defaults if not provided)
     home_office_sqm = data.get('home_office_sqm')
@@ -888,7 +942,8 @@ def calculate_tax():
         previous_payments=previous_payments,
         db_session=db.session,
         home_office_sqm=home_office_sqm,
-        house_total_sqm=house_total_sqm
+        house_total_sqm=house_total_sqm,
+        provisional_period=provisional_period
     )
 
     # Convert Decimals to strings for JSON serialization
@@ -896,6 +951,7 @@ def calculate_tax():
         'success': True,
         'calculation': {
             'period_months': tax_result['period_months'],
+            'provisional_period': tax_result['provisional_period'],
             'period_income': str(tax_result['period_income']),
             'period_expenses': str(tax_result['period_expenses']),
             'period_profit': str(tax_result['period_profit']),
@@ -962,6 +1018,45 @@ def calculate_tax():
     }
 
     return jsonify(result)
+
+
+@app.route('/api/tax_rates/<int:tax_year>')
+@login_required
+def tax_rates(tax_year):
+    """Return the income tax brackets, rebates and medical credits for a tax year.
+
+    Used by the tax calculator to display the rate table that matches the tax
+    year derived from the calculation period. ``tax_year`` uses the START-year
+    convention of the TaxYear table and the calculator (e.g. 2025 == the
+    2025/2026 tax year), which is the value returned as ``calc.tax_year``.
+    """
+    tax_year_obj = TaxYear.query.filter_by(year=tax_year).first()
+    if not tax_year_obj:
+        return jsonify({
+            'success': False,
+            'error': f'No tax tables configured for {tax_year}/{tax_year + 1}'
+        }), 404
+
+    brackets = sorted(tax_year_obj.brackets, key=lambda b: b.bracket_order)
+    rebates = {r.rebate_type: str(r.amount) for r in tax_year_obj.rebates}
+    credits = {c.credit_type: str(c.monthly_amount) for c in tax_year_obj.medical_credits}
+
+    return jsonify({
+        'success': True,
+        'tax_year': tax_year,
+        'label': f'{tax_year}/{tax_year + 1}',
+        'brackets': [
+            {
+                'min_income': str(b.min_income),
+                'max_income': str(b.max_income) if b.max_income is not None else None,
+                'rate': str(b.rate),
+                'base_tax': str(b.base_tax),
+            }
+            for b in brackets
+        ],
+        'rebates': rebates,
+        'medical_credits': credits,
+    })
 
 
 @app.route('/income_sources')
@@ -1070,4 +1165,7 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         init_categories_in_db(db, Category)
-    app.run(debug=True)
+    # Debug is off unless FLASK_DEBUG is explicitly truthy. Production runs via
+    # gunicorn (see Procfile/render.yaml) and never reaches this block.
+    debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug)
