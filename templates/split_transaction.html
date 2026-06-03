@@ -55,6 +55,7 @@
             </div>
 
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <!-- Hidden fields to preserve filter state -->
                 <input type="hidden" name="filter_category_id" value="{{ filter_params.category_id }}">
                 <input type="hidden" name="filter_start_date" value="{{ filter_params.start_date }}">

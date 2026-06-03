@@ -13,13 +13,14 @@
                 <br><small class="text-muted">{{ transaction.date.strftime('%d %b %Y') }} | R {{ "%.2f"|format(transaction.amount|abs) }}</small>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
-                        <label for="file_path" class="form-label">Receipt File Path</label>
-                        <input type="text" class="form-control" id="file_path" name="file_path"
-                               placeholder="C:\Users\...\Receipt.pdf" required>
+                        <label for="receipt" class="form-label">Receipt File</label>
+                        <input type="file" class="form-control" id="receipt" name="receipt"
+                               accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic" required>
                         <div class="form-text">
-                            Enter the full path to your receipt file (PDF, JPG, PNG, etc.)
+                            Upload your receipt (PDF, JPG, PNG, GIF, WEBP, HEIC).
                         </div>
                     </div>
 
@@ -43,10 +44,10 @@
             <div class="card-body">
                 <h6><i class="bi bi-info-circle"></i> Tips</h6>
                 <ul class="mb-0 small">
-                    <li>Receipt files are linked by path - they stay in their original location</li>
-                    <li>Supported formats: PDF, JPG, PNG, and other common image formats</li>
+                    <li>Receipt files are uploaded and stored with the app</li>
+                    <li>Supported formats: PDF, JPG, PNG, GIF, WEBP, HEIC</li>
                     <li>You can attach multiple receipts to a single transaction</li>
-                    <li>Example path: <code>C:\Users\cesai_b8mratk\OneDrive\Documents\Admin\Tax\TY2026\expenses\Receipt_2025-08-07.pdf</code></li>
+                    <li>Note: on the hosted (Render) deployment the filesystem is ephemeral, so uploaded receipts may not persist across restarts/redeploys</li>
                 </ul>
             </div>
         </div>

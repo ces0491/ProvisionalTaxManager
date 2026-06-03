@@ -247,7 +247,8 @@ document.getElementById('addPatternForm').addEventListener('submit', async (e) =
         const response = await fetch('/api/income_source/add', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN
             },
             body: JSON.stringify(formData)
         });
@@ -268,7 +269,8 @@ document.getElementById('addPatternForm').addEventListener('submit', async (e) =
 async function toggleRule(ruleId) {
     try {
         const response = await fetch(`/api/income_source/${ruleId}/toggle`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'X-CSRFToken': window.CSRF_TOKEN }
         });
 
         const data = await response.json();
@@ -290,7 +292,8 @@ async function deleteRule(ruleId) {
 
     try {
         const response = await fetch(`/api/income_source/${ruleId}/delete`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'X-CSRFToken': window.CSRF_TOKEN }
         });
 
         const data = await response.json();

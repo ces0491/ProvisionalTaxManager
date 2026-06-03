@@ -283,6 +283,7 @@
                             <form method="POST"
                                   action="{{ url_for('delete_transaction', id=trans.id) }}"
                                   style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger"
                                         onclick="return confirm('Delete this transaction?')"
                                         title="Delete">
@@ -561,6 +562,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN,
             },
             body: JSON.stringify({
                 transaction_ids: ids,
@@ -596,6 +598,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN,
             },
             body: JSON.stringify({
                 transaction_ids: ids

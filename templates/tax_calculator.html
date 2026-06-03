@@ -408,7 +408,8 @@ document.getElementById('taxForm').addEventListener('submit', async (e) => {
         const response = await fetch('/api/calculate_tax', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.CSRF_TOKEN
             },
             body: JSON.stringify(formData)
         });

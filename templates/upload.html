@@ -18,6 +18,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="files" class="form-label">Choose one or more PDF files</label>
                         <input type="file" class="form-control" id="files" name="files[]" multiple accept=".pdf" required>

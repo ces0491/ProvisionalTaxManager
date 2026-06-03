@@ -5,10 +5,15 @@ import hmac
 import os
 import shutil
 import tempfile
+import uuid
 import zipfile
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from decimal import Decimal
+
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from src.config import Config
 from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule, Receipt, DismissedDuplicate, TaxYear
@@ -24,8 +29,24 @@ app.config.from_object(Config)
 # Create upload folder
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Allowed receipt upload extensions
+RECEIPT_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'}
+
 # Initialize database
 db.init_app(app)
+
+# CSRF protection for all state-changing requests (forms + JSON fetch via the
+# X-CSRFToken header). Disabled in tests via WTF_CSRF_ENABLED=False.
+csrf = CSRFProtect(app)
+
+# Rate limiting (in-memory; suitable for the single Render instance). Only the
+# login route is limited, to slow password brute-forcing.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri='memory://',
+)
 
 # Authentication decorator
 def login_required(f):
@@ -38,6 +59,7 @@ def login_required(f):
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def login():
     if request.method == 'POST':
         password = request.form.get('password') or ''
@@ -509,36 +531,38 @@ def add_receipt(id):
     transaction = Transaction.query.get_or_404(id)
 
     if request.method == 'POST':
-        file_path = request.form.get('file_path', '').strip()
         description = request.form.get('description', '').strip()
+        file = request.files.get('receipt')
 
-        if not file_path:
-            flash('Please provide a file path', 'error')
+        if not file or not file.filename:
+            flash('Please choose a receipt file to upload', 'error')
             return render_template('add_receipt.html', transaction=transaction)
 
-        # Normalize path
-        file_path = os.path.normpath(file_path)
-
-        # Validate file exists
-        if not os.path.exists(file_path):
-            flash(f'File not found: {file_path}', 'error')
+        ext = os.path.splitext(file.filename)[1].lower().lstrip('.')
+        if ext not in RECEIPT_EXTENSIONS:
+            allowed = ', '.join(sorted(RECEIPT_EXTENSIONS))
+            flash(f'Unsupported file type ".{ext}". Allowed: {allowed}', 'error')
             return render_template('add_receipt.html', transaction=transaction)
 
-        # Extract filename and type
-        filename = os.path.basename(file_path)
-        file_type = os.path.splitext(filename)[1].lower().lstrip('.')
+        # Store under an app-controlled directory with a unique, safe name.
+        receipts_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'receipts')
+        os.makedirs(receipts_dir, exist_ok=True)
+        safe_name = secure_filename(file.filename)
+        stored_name = f'{id}_{uuid.uuid4().hex[:8]}_{safe_name}'
+        file_path = os.path.join(receipts_dir, stored_name)
+        file.save(file_path)
 
         receipt = Receipt(
             transaction_id=transaction.id,
             file_path=file_path,
-            filename=filename,
-            file_type=file_type,
+            filename=safe_name,
+            file_type=ext,
             description=description
         )
         db.session.add(receipt)
         db.session.commit()
 
-        flash(f'Receipt "{filename}" attached successfully', 'success')
+        flash(f'Receipt "{safe_name}" uploaded successfully', 'success')
         return redirect(url_for('edit_transaction', id=transaction.id))
 
     return render_template('add_receipt.html', transaction=transaction)

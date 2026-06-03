@@ -21,9 +21,13 @@ os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(tempfile.gettempdir(), 
 from datetime import date  # noqa: E402
 from decimal import Decimal  # noqa: E402
 
-from app import app as flask_app  # noqa: E402
+from app import app as flask_app, limiter  # noqa: E402
 from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule  # noqa: E402
 from src.config import Config  # noqa: E402
+
+# The limiter is initialised at import (before TestConfig), so its enabled
+# state must be turned off directly rather than via RATELIMIT_ENABLED config.
+limiter.enabled = False
 
 
 class TestConfig(Config):
@@ -31,6 +35,7 @@ class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    RATELIMIT_ENABLED = False
     AUTH_PASSWORD = 'test123'
 
 
