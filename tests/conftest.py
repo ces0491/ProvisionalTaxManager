@@ -4,15 +4,26 @@ Pytest configuration and fixtures
 import pytest
 import os
 import sys
-from datetime import date
-from decimal import Decimal
+import tempfile
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app
-from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule
-from src.config import Config
+# CRITICAL: isolate the test database BEFORE importing the app.
+# src/config.py reads DATABASE_URL at import time and Flask-SQLAlchemy binds the
+# engine when db.init_app(app) runs (also at import). A TestConfig override set
+# *after* that import is silently ignored, so the fixtures' db.drop_all() would
+# run against the developer's real database. Overriding the env var first is the
+# only point at which the engine can be redirected to a throwaway DB.
+# (load_dotenv() in config.py uses override=False, so this pre-set value wins.)
+os.environ['DATABASE_URL'] = 'sqlite:///' + os.path.join(tempfile.gettempdir(), 'ptm_test_db.sqlite')
+
+from datetime import date  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+from app import app as flask_app  # noqa: E402
+from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule  # noqa: E402
+from src.config import Config  # noqa: E402
 
 
 class TestConfig(Config):
