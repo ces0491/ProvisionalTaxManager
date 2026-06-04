@@ -62,15 +62,11 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     row = write_table8_business_summary(ws, row, trans_by_month, months_in_period)
     row += 2
 
-    # TABLE 9: Monthly Personal Expense Summary
-    row = write_table9_personal_summary(ws, row, trans_by_month, months_in_period)
-    row += 2
-
-    # TABLE 10: Monthly Net Profit Summary
+    # TABLE 9: Monthly Net Profit Summary
     row = write_table10_net_profit(ws, row, trans_by_month, months_in_period)
     row += 2
 
-    # TABLE 11: Annual Summary for Tax Calculation
+    # TABLE 10: Annual Summary for Tax Calculation
     row = write_table11_annual_summary(ws, row, trans_by_month, start_date, end_date)
 
     # Practitioner-style summary sheet (placed first so the workbook opens on it)
@@ -325,7 +321,7 @@ def write_month_detail_table(ws, start_row, month, transactions):
 
     # Header
     ws.merge_cells(f'A{row}:E{row}')
-    ws[f'A{row}'] = f'Expenses for {month_name}'
+    ws[f'A{row}'] = f'Business Expenses for {month_name}'
     ws[f'A{row}'].font = Font(bold=True, size=12)
     row += 1
 
@@ -363,36 +359,9 @@ def write_month_detail_table(ws, start_row, month, transactions):
     ws.cell(row=row, column=3).value = float(business_total)
     ws.cell(row=row, column=3).number_format = '#,##0.00'
     ws.cell(row=row, column=3).font = Font(bold=True)
-    row += 2
-
-    # Personal expenses
-    ws.cell(row=row, column=1).value = 'PERSONAL EXPENSES'
-    ws.cell(row=row, column=1).font = Font(bold=True, underline='single')
     row += 1
 
-    personal_trans = [t for t in transactions
-                     if t.category and t.category.category_type == 'personal_expense'
-                     and float(t.amount) < 0]
-    personal_total = Decimal('0')
-
-    for trans in personal_trans:
-        ws.cell(row=row, column=1).value = trans.category.name
-        ws.cell(row=row, column=2).value = trans.description
-        ws.cell(row=row, column=3).value = abs(float(trans.amount))
-        ws.cell(row=row, column=3).number_format = '#,##0.00'
-        ws.cell(row=row, column=4).value = trans.date.strftime('%d-%b')
-        ws.cell(row=row, column=5).value = f"{trans.statement.account.account_type}"
-        personal_total += abs(trans.amount)
-        row += 1
-
-    # Personal subtotal
-    ws.cell(row=row, column=1).value = 'SUBTOTAL PERSONAL'
-    ws.cell(row=row, column=1).font = Font(bold=True)
-    ws.cell(row=row, column=3).value = float(personal_total)
-    ws.cell(row=row, column=3).number_format = '#,##0.00'
-    ws.cell(row=row, column=3).font = Font(bold=True)
-    row += 1
-
+    # Personal/non-deductible expenses are intentionally not listed.
     return row
 
 
@@ -456,60 +425,13 @@ def write_table8_business_summary(ws, start_row, trans_by_month, months):
     return row
 
 
-def write_table9_personal_summary(ws, start_row, trans_by_month, months):
-    """Table 9: Monthly Personal Expense Summary (Excluded)"""
-    row = start_row
-
-    # Header
-    ws.merge_cells(f'A{row}:H{row}')
-    ws[f'A{row}'] = 'Table 9: Monthly Personal Expense Summary (Excluded from Tax)'
-    ws[f'A{row}'].font = Font(bold=True, size=14)
-    row += 1
-
-    # Similar structure to Table 8 but for personal expenses
-    ws.cell(row=row, column=1).value = 'Category'
-    ws.cell(row=row, column=1).font = Font(bold=True)
-
-    for col, month in enumerate(months, start=2):
-        ws.cell(row=row, column=col).value = month.strftime('%b-%y')
-        ws.cell(row=row, column=col).font = Font(bold=True)
-
-    ws.cell(row=row, column=len(months) + 2).value = 'Total'
-    ws.cell(row=row, column=len(months) + 2).font = Font(bold=True)
-    row += 1
-
-    # Personal categories
-    from src.services.categorizer import CATEGORIES
-    personal_categories = [cat['name'] for cat in CATEGORIES.values() if cat['type'] == 'personal_expense']
-
-    for cat_name in personal_categories:
-        ws.cell(row=row, column=1).value = cat_name
-        row_total = Decimal('0')
-
-        for col, month in enumerate(months, start=2):
-            month_trans = [t for t in trans_by_month[month]
-                          if t.category and t.category.name == cat_name
-                          and float(t.amount) < 0]
-            month_total = sum([abs(t.amount) for t in month_trans], Decimal('0'))
-            ws.cell(row=row, column=col).value = float(month_total)
-            ws.cell(row=row, column=col).number_format = '#,##0.00'
-            row_total += month_total
-
-        ws.cell(row=row, column=len(months) + 2).value = float(row_total)
-        ws.cell(row=row, column=len(months) + 2).number_format = '#,##0.00'
-        row += 1
-
-    row += 1
-    return row
-
-
 def write_table10_net_profit(ws, start_row, trans_by_month, months):
     """Table 10: Monthly Net Profit Summary"""
     row = start_row
 
     # Header
     ws.merge_cells(f'A{row}:D{row}')
-    ws[f'A{row}'] = 'Table 10: Monthly Net Profit Summary'
+    ws[f'A{row}'] = 'Table 9: Monthly Net Profit Summary'
     ws[f'A{row}'].font = Font(bold=True, size=14)
     row += 1
 
@@ -573,7 +495,7 @@ def write_table11_annual_summary(ws, start_row, trans_by_month, start_date, end_
 
     # Header
     ws.merge_cells(f'A{row}:B{row}')
-    ws[f'A{row}'] = 'Table 11: Annual Summary for Tax Calculation'
+    ws[f'A{row}'] = 'Table 10: Annual Summary for Tax Calculation'
     ws[f'A{row}'].font = Font(bold=True, size=14)
     row += 1
 

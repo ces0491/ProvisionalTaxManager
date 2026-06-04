@@ -29,8 +29,9 @@ transaction categorization, and tax report generation.
   insurance is reduced to its deductible building/contents portion, with motor
   and life cover excluded
 - **Excel Export**: Generates a tax-practitioner workbook — a one-page
-  Provisional Summary (income, deductible expenses, home-office box) plus a
-  detailed 11-table breakdown
+  Provisional Summary (income, deductible expenses, home-office box, medical
+  credit) plus a detailed business-expense breakdown; personal expenses are
+  excluded
 - **Tax Periods**: Supports both provisional tax periods (Mar-Aug, Sep-Feb),
   selectable per tax year
 - **Extrapolation**: Automatically projects incomplete months for current period
@@ -225,14 +226,15 @@ practitioner:
   into a single "Home Office" expense line
 - Period net profit
 
-A second **Tax Report** sheet contains the detailed 11-table breakdown:
+A second **Tax Report** sheet contains the detailed breakdown — deductible
+business expenses only (personal expenses are excluded; medical is reported as a
+credit, not a deduction):
 
 1. **Table 1**: Monthly Income Summary
-2. **Tables 2-7**: Individual month expense details (one per month)
+2. **Tables 2-7**: Individual month business-expense details
 3. **Table 8**: Monthly Business Expense Summary (cross-month)
-4. **Table 9**: Monthly Personal Expense Summary (excluded)
-5. **Table 10**: Monthly Net Profit Summary
-6. **Table 11**: Annual Summary for Tax Calculation
+4. **Table 9**: Monthly Net Profit Summary
+5. **Table 10**: Annual Summary for Tax Calculation
 
 Format: `PnLMarAugforAug2025.xlsx` or `PnLSepFebforFeb2026.xlsx`
 
