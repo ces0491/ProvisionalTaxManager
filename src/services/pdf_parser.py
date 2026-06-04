@@ -473,13 +473,23 @@ class BankStatementParser:
                     date_str = date_match.group(1)
                     rest = date_match.group(2)
 
-                    # Get the year from context (look at previous lines for year marker like "2024" or "2025")
-                    year = "25"  # default
-                    for j in range(max(0, i-10), i):
-                        if re.match(r'^\d{4}$', lines[j].strip()):
-                            year_full = lines[j].strip()
-                            year = year_full[-2:]
-                            break
+                    # Home-loan rows are "DD Mon YY Description...": the 2-digit year
+                    # follows the month and must be read from the row itself.
+                    # Otherwise every row from January on is dated to the statement's
+                    # start year (e.g. Jan 2026 parsed as Jan 2025), shifting interest
+                    # and building-insurance debits into the wrong tax year.
+                    year_match = re.match(r'^(\d{2})\s+(.+)', rest)
+                    if year_match:
+                        year = year_match.group(1)
+                        rest = year_match.group(2)
+                    else:
+                        # Fallbacks: a 4-digit year marker in nearby lines, else the
+                        # statement's start year.
+                        year = str(self.start_date.year)[-2:] if self.start_date else '25'
+                        for j in range(max(0, i - 10), i):
+                            if re.match(r'^\d{4}$', lines[j].strip()):
+                                year = lines[j].strip()[-2:]
+                                break
 
                     full_date_str = f"{date_str} {year}"
 

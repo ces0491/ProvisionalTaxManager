@@ -78,21 +78,22 @@ CATEGORIES = {
             'OVERLIMIT FEE',
         ],
     },
+    'insurance_life': {
+        # Life / credit-life cover is NOT deductible - kept out of the home-office
+        # apportionment entirely. Must be checked before the generic 'insurance'
+        # rule below, since DISCLIFE descriptions also contain "INSURANCE PREMIUM".
+        'name': 'Insurance (Life/Personal)',
+        'type': 'personal_expense',
+        'patterns': ['DISCLIFE'],
+    },
     'insurance': {
         # Deductible building / household-contents cover, home-office apportioned.
         # DISCINSURE (Discovery) is only partly deductible (contents portion) -
-        # the deductible fraction is applied in tax_calculator. INSURANCE PREMIUM
+        # the deductible amount is applied in tax_calculator. INSURANCE PREMIUM
         # is the bond building/homeowner's cover (fully deductible).
         'name': 'Insurance',
         'type': 'business_expense',
         'patterns': ['DISCINSURE', 'INSURANCE PREMIUM'],
-    },
-    'insurance_life': {
-        # Life / credit-life cover is NOT deductible - kept out of the home-office
-        # apportionment entirely.
-        'name': 'Insurance (Life/Personal)',
-        'type': 'personal_expense',
-        'patterns': ['DISCLIFE'],
     },
     'interest_mortgage': {
         'name': 'Interest (Mortgage)',
