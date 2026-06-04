@@ -11,6 +11,15 @@ from openpyxl.styles import Font, PatternFill
 from datetime import datetime
 from decimal import Decimal
 
+from src.config import Config
+from src.services.tax_calculator import (
+    HOME_OFFICE_CATEGORIES,
+    INSURANCE_CATEGORY,
+    insurance_deductible_fraction,
+    DEFAULT_HOME_OFFICE_SQM,
+    DEFAULT_HOUSE_TOTAL_SQM,
+)
+
 
 def generate_tax_export(db, Transaction, Category, start_date, end_date, filename):
     """
@@ -64,10 +73,137 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     # TABLE 11: Annual Summary for Tax Calculation
     row = write_table11_annual_summary(ws, row, trans_by_month, start_date, end_date)
 
+    # Practitioner-style summary sheet (placed first so the workbook opens on it)
+    write_provisional_summary_sheet(wb, transactions, start_date, end_date)
+
     # Save workbook to the OS temp directory (portable across Windows/Linux)
     output_path = os.path.join(tempfile.gettempdir(), filename)
     wb.save(output_path)
     return output_path
+
+
+def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
+    """Practitioner-style provisional tax summary sheet.
+
+    Mirrors the layout the tax practitioner uses: a monthly income summary, the
+    deductible expense lines, and a home-office apportionment box. Home-office
+    categories (interest, rates, insurance, maintenance) appear only inside the
+    apportionment box and are rolled into one 'Home Office' expense line.
+    Insurance is reduced to its deductible building / household-contents portion
+    before apportionment (see tax_calculator.insurance_deductible_fraction).
+    """
+    ws = wb.create_sheet('Provisional Summary', 0)
+
+    office_sqm = DEFAULT_HOME_OFFICE_SQM
+    house_sqm = DEFAULT_HOUSE_TOTAL_SQM
+    office_pct = (office_sqm / house_sqm) if house_sqm else Decimal('0')
+
+    bold = Font(bold=True)
+    title = Font(bold=True, size=14)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+
+    def money(row, value):
+        cell = ws.cell(row, 2, float(value))
+        cell.number_format = '#,##0.00'
+        return cell
+
+    # --- Aggregate ---
+    income_by_month = {}      # 'YYYY-MM' -> Decimal
+    expense_by_category = {}  # non-home-office business expense category -> Decimal (full)
+    home_office_base = {}     # home-office category -> deductible base Decimal
+
+    for t in transactions:
+        if t.is_deleted or t.is_duplicate:
+            continue
+        cat = t.category.name if t.category else 'Uncategorized'
+        ctype = t.category.category_type if t.category else 'personal_expense'
+        amt = abs(Decimal(str(t.amount)))
+        if ctype == 'income':
+            key = t.date.strftime('%Y-%m')
+            income_by_month[key] = income_by_month.get(key, Decimal('0')) + amt
+        elif ctype == 'business_expense':
+            if cat in HOME_OFFICE_CATEGORIES:
+                base = amt
+                if cat == INSURANCE_CATEGORY:
+                    base = (amt * insurance_deductible_fraction(t.description)).quantize(Decimal('0.01'))
+                home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + base
+            else:
+                expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + amt
+
+    ho_subtotal = sum(home_office_base.values(), Decimal('0'))
+    home_office_deduction = (ho_subtotal * office_pct).quantize(Decimal('0.01'))
+    total_income = sum(income_by_month.values(), Decimal('0'))
+    total_expenses = sum(expense_by_category.values(), Decimal('0')) + home_office_deduction
+    net_profit = total_income - total_expenses
+
+    # --- Write ---
+    r = 1
+    ws.cell(r, 1, f'{Config.BUSINESS_NAME} - Provisional Tax Summary').font = title
+    r += 1
+    ws.cell(r, 1, f'Tax Reference: {Config.TAX_REFERENCE}')
+    r += 1
+    ws.cell(r, 1, f"Period: {start_date.strftime('%d %b %Y')} - {end_date.strftime('%d %b %Y')}")
+    r += 2
+
+    c = ws.cell(r, 1, 'Income (by month)')
+    c.font = bold
+    c.fill = header_fill
+    r += 1
+    for key in sorted(income_by_month):
+        ws.cell(r, 1, datetime.strptime(key, '%Y-%m').strftime('%b %Y'))
+        money(r, income_by_month[key])
+        r += 1
+    ws.cell(r, 1, 'Total Income').font = bold
+    money(r, total_income).font = bold
+    r += 2
+
+    c = ws.cell(r, 1, 'Deductible Expenses')
+    c.font = bold
+    c.fill = header_fill
+    r += 1
+    for cat in sorted(expense_by_category):
+        ws.cell(r, 1, cat)
+        money(r, expense_by_category[cat])
+        r += 1
+    ws.cell(r, 1, 'Home Office (apportioned)')
+    money(r, home_office_deduction)
+    r += 1
+    ws.cell(r, 1, 'Total Expenses').font = bold
+    money(r, total_expenses).font = bold
+    r += 2
+
+    ws.cell(r, 1, 'Net Profit (period)').font = bold
+    money(r, net_profit).font = bold
+    r += 2
+
+    c = ws.cell(r, 1, 'Home Office Apportionment')
+    c.font = bold
+    c.fill = header_fill
+    r += 1
+    for cat in sorted(home_office_base):
+        label = 'Insurance (building/contents)' if cat == INSURANCE_CATEGORY else cat
+        ws.cell(r, 1, label)
+        money(r, home_office_base[cat])
+        r += 1
+    ws.cell(r, 1, 'Subtotal').font = bold
+    money(r, ho_subtotal).font = bold
+    r += 1
+    ws.cell(r, 1, 'Office size (m²)')
+    ws.cell(r, 2, float(office_sqm))
+    r += 1
+    ws.cell(r, 1, 'Home size (m²)')
+    ws.cell(r, 2, float(house_sqm))
+    r += 1
+    ws.cell(r, 1, 'Percentage claim')
+    pct_cell = ws.cell(r, 2, float(round(office_pct, 4)))
+    pct_cell.number_format = '0.00%'
+    r += 1
+    ws.cell(r, 1, 'Home Office deduction').font = bold
+    money(r, home_office_deduction).font = bold
+
+    ws.column_dimensions['A'].width = 34
+    ws.column_dimensions['B'].width = 16
+    return ws
 
 
 def get_months_in_period(start_date, end_date):

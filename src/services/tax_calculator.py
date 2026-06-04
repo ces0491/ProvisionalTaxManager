@@ -284,7 +284,32 @@ HOME_OFFICE_CATEGORIES = [
 
 # Default home office dimensions (can be overridden in function call)
 DEFAULT_HOME_OFFICE_SQM = Decimal('22')
-DEFAULT_HOUSE_TOTAL_SQM = Decimal('268')
+DEFAULT_HOUSE_TOTAL_SQM = Decimal('268.5')
+
+# Category whose amounts may be only partly deductible insurance.
+INSURANCE_CATEGORY = 'Insurance'
+
+# Of an insurance premium, the fraction that is deductible building / household-
+# contents cover (home-office apportioned). The remainder (motor, personal
+# liability, life, etc.) is private and not deductible. Matched on the
+# transaction description (first matching substring wins); anything not listed
+# is treated as fully deductible building cover (e.g. bond homeowner's cover).
+# Source: Discovery Insure plan schedule 4001274505 - household contents premium
+# R871.70 of the R2,694.91 total monthly premium.
+INSURANCE_DEDUCTIBLE_FRACTIONS = [
+    ('DISCLIFE', Decimal('0')),                              # life cover: never deductible
+    ('DISCINSURE', Decimal('871.70') / Decimal('2694.91')),  # contents portion only
+]
+DEFAULT_INSURANCE_FRACTION = Decimal('1')
+
+
+def insurance_deductible_fraction(description: str) -> Decimal:
+    """Fraction of an insurance premium that is deductible building/contents cover."""
+    desc = (description or '').upper()
+    for pattern, fraction in INSURANCE_DEDUCTIBLE_FRACTIONS:
+        if pattern in desc:
+            return fraction
+    return DEFAULT_INSURANCE_FRACTION
 
 
 def calculate_tax_from_transactions(
@@ -395,18 +420,28 @@ def calculate_tax_from_transactions(
 
             # Apply home office apportionment to relevant categories
             if category in HOME_OFFICE_CATEGORIES:
-                apportioned_amount = (full_amount * home_office_percentage).quantize(Decimal('0.01'))
-                reduction = full_amount - apportioned_amount
+                # Insurance is only partly deductible (building/household-contents
+                # cover); the private remainder (motor, liability, life) is
+                # dropped before apportionment.
+                if category == INSURANCE_CATEGORY:
+                    deductible_base = (
+                        full_amount * insurance_deductible_fraction(trans.get('description'))
+                    ).quantize(Decimal('0.01'))
+                else:
+                    deductible_base = full_amount
+
+                apportioned_amount = (deductible_base * home_office_percentage).quantize(Decimal('0.01'))
+                reduction = deductible_base - apportioned_amount
                 total_apportioned_reduction += reduction
 
-                # Track apportionment details
+                # Track apportionment details (against the deductible base)
                 if category not in apportionment_detail:
                     apportionment_detail[category] = {
                         'full': Decimal('0'),
                         'apportioned': Decimal('0'),
                         'reduction': Decimal('0')
                     }
-                apportionment_detail[category]['full'] += full_amount
+                apportionment_detail[category]['full'] += deductible_base
                 apportionment_detail[category]['apportioned'] += apportioned_amount
                 apportionment_detail[category]['reduction'] += reduction
 
