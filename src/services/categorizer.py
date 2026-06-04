@@ -128,13 +128,18 @@ CATEGORIES = {
         ],
     },
     'medical_aid': {
+        # Medical scheme contributions are NOT a business deduction - they
+        # generate the Medical Scheme Fees Tax Credit (applied per member in the
+        # tax calculation), so they must not reduce business income.
         'name': 'Medical Aid',
-        'type': 'business_expense',
+        'type': 'personal_expense',
         'patterns': ['DISC PREM', 'MEDICAL AID CONTRIBUTION', 'DISCOVERY'],
     },
     'medical_fees': {
+        # Out-of-pocket medical costs are not a business deduction; they feed the
+        # additional medical expenses tax credit.
         'name': 'Medical Fees',
-        'type': 'business_expense',
+        'type': 'personal_expense',
         'patterns': ['DR MALCOL', 'SPECSAVERS', 'CLICKS PINELA'],
     },
     'municipal': {

@@ -82,15 +82,25 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     return output_path
 
 
+# Medical categories: not deductible expenses. They feed the medical tax credit
+# (applied per member in the tax calculation), so they are reported in their own
+# section, never under Expenses.
+MEDICAL_CATEGORIES = {'Medical Aid', 'Medical Fees'}
+
+
 def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     """Practitioner-style provisional tax summary sheet.
 
-    Mirrors the layout the tax practitioner uses: a monthly income summary, the
-    deductible expense lines, and a home-office apportionment box. Home-office
-    categories (interest, rates, insurance, maintenance) appear only inside the
-    apportionment box and are rolled into one 'Home Office' expense line.
-    Insurance is reduced to its deductible building / household-contents portion
-    before apportionment (see tax_calculator.insurance_deductible_fraction).
+    Organised into three groups, matching how a tax practitioner reads it:
+      - Expenses: deductible business expenses (full amounts), with home-office
+        categories rolled into a single apportioned 'Home Office' line.
+      - Home Office Apportionment: the building blocks of that line (interest,
+        rates, deductible insurance) x office percentage. Insurance is reduced to
+        its deductible building/household-contents portion first.
+      - Medical: scheme contributions and out-of-pocket fees, shown for
+        information only - these support the medical tax credit and are NOT
+        deducted from income.
+    Personal (non-deductible, non-medical) expenses are excluded entirely.
     """
     ws = wb.create_sheet('Provisional Summary', 0)
 
@@ -100,6 +110,7 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
 
     bold = Font(bold=True)
     title = Font(bold=True, size=14)
+    italic = Font(italic=True, size=9)
     header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
 
     def money(row, value):
@@ -109,8 +120,9 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
 
     # --- Aggregate ---
     income_by_month = {}      # 'YYYY-MM' -> Decimal
-    expense_by_category = {}  # non-home-office business expense category -> Decimal (full)
+    expense_by_category = {}  # deductible (non-home-office, non-medical) business expense -> Decimal
     home_office_base = {}     # home-office category -> deductible base Decimal
+    medical_by_category = {}  # medical category -> Decimal (informational, not deducted)
 
     for t in transactions:
         if t.is_deleted or t.is_duplicate:
@@ -118,7 +130,11 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
         cat = t.category.name if t.category else 'Uncategorized'
         ctype = t.category.category_type if t.category else 'personal_expense'
         amt = abs(Decimal(str(t.amount)))
-        if ctype == 'income':
+
+        # Medical is pulled out regardless of stored type (credit, not a deduction)
+        if cat in MEDICAL_CATEGORIES:
+            medical_by_category[cat] = medical_by_category.get(cat, Decimal('0')) + amt
+        elif ctype == 'income':
             key = t.date.strftime('%Y-%m')
             income_by_month[key] = income_by_month.get(key, Decimal('0')) + amt
         elif ctype == 'business_expense':
@@ -129,6 +145,7 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
                 home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + base
             else:
                 expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + amt
+        # personal / excluded (non-medical) expenses are intentionally omitted
 
     ho_subtotal = sum(home_office_base.values(), Decimal('0'))
     home_office_deduction = (ho_subtotal * office_pct).quantize(Decimal('0.01'))
@@ -145,6 +162,7 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     ws.cell(r, 1, f"Period: {start_date.strftime('%d %b %Y')} - {end_date.strftime('%d %b %Y')}")
     r += 2
 
+    # Income
     c = ws.cell(r, 1, 'Income (by month)')
     c.font = bold
     c.fill = header_fill
@@ -157,7 +175,8 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     money(r, total_income).font = bold
     r += 2
 
-    c = ws.cell(r, 1, 'Deductible Expenses')
+    # Expenses (deductible)
+    c = ws.cell(r, 1, 'Expenses (deductible)')
     c.font = bold
     c.fill = header_fill
     r += 1
@@ -176,6 +195,7 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     money(r, net_profit).font = bold
     r += 2
 
+    # Home Office Apportionment
     c = ws.cell(r, 1, 'Home Office Apportionment')
     c.font = bold
     c.fill = header_fill
@@ -200,6 +220,21 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     r += 1
     ws.cell(r, 1, 'Home Office deduction').font = bold
     money(r, home_office_deduction).font = bold
+    r += 2
+
+    # Medical (tax credit - not a deduction)
+    c = ws.cell(r, 1, 'Medical (tax credit - not a deduction)')
+    c.font = bold
+    c.fill = header_fill
+    r += 1
+    for cat in sorted(medical_by_category):
+        ws.cell(r, 1, cat)
+        money(r, medical_by_category[cat])
+        r += 1
+    ws.cell(r, 1,
+            'Not deducted from income. Supports the medical tax credit, '
+            'applied per member in the tax calculation.').font = italic
+    r += 1
 
     ws.column_dimensions['A'].width = 34
     ws.column_dimensions['B'].width = 16
