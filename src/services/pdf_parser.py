@@ -24,6 +24,10 @@ class BankStatementParser:
             if 'SIGNATURE' in first_page_text_upper or 'CHEQUE' in first_page_text_upper:
                 self.account_type = 'cheques'
                 return self._parse_cheques_account(pdf)
+            # NOTE: '5520' is the BIN of *this* account holder's card, not a generic
+            # Standard Bank prefix. It's only a last-resort signal here (the text
+            # cues above normally suffice) and in the account-number extraction below;
+            # a card reissued on a different BIN would need this updated.
             elif ('CREDIT CARD' in first_page_text_upper or
                   'CARD DIVISION' in first_page_text_upper or
                   'WORLD CITIZEN CARD' in first_page_text_upper or
@@ -109,8 +113,17 @@ class BankStatementParser:
                         year_in_line = re.search(r'^(\d{1,2}\s+\w{3}\s+\d{2})', line)
                         if year_in_line:
                             full_date_str = year_in_line.group(1)
+                        elif self.start_date:
+                            # No inline year and no year-marker line above: guess the
+                            # statement's start year. Best-effort only -- right for a
+                            # statement within one calendar year, but a Sep-Feb period
+                            # with no marker would mis-date Jan/Feb rows (the failure
+                            # the mortgage parser avoids by reading the year per row).
+                            # Still beats the fixed literal, which is the last resort.
+                            year = str(self.start_date.year)[-2:]
+                            full_date_str = f"{date_str} {year}"
                         else:
-                            full_date_str = date_str + " 25"  # default to 2025
+                            full_date_str = f"{date_str} 25"  # last-resort guess only
 
                     # Parse the transaction
                     transaction = self._parse_transaction_line(full_date_str, rest)
@@ -314,15 +327,20 @@ class BankStatementParser:
                     if full_date_match:
                         full_date_str = full_date_match.group(1)
                     else:
-                        # Use current_year if available, otherwise extract from statement dates
+                        # Row has no year. Prefer the printed year-marker line
+                        # (current_year) -- these statements depend on it, since the
+                        # per-row date usually omits the year. With no marker, guess
+                        # the statement's start year: best-effort only, right within a
+                        # single calendar year but wrong for Jan/Feb rows on a Sep-Feb
+                        # statement (the failure the mortgage parser avoids by reading
+                        # the year per row). The bare literal is the last resort.
                         if current_year:
                             full_date_str = f"{date_str} {current_year}"
                         elif self.start_date:
-                            # Use year from start_date
                             year = str(self.start_date.year)[-2:]
                             full_date_str = f"{date_str} {year}"
                         else:
-                            full_date_str = f"{date_str} 25"  # fallback
+                            full_date_str = f"{date_str} 25"  # last-resort guess only
 
                     # Check if description is on the next line
                     # If rest only contains amounts (no alphabetic description), check next line
@@ -609,11 +627,13 @@ class BankStatementParser:
         for fmt in formats:
             try:
                 parsed_date = datetime.strptime(date_str, fmt).date()
-                # Validate year is reasonable (2020-2030)
-                if 2020 <= parsed_date.year <= 2030:
+                # Sanity window only to catch grossly mis-parsed years (e.g. a 2-digit
+                # year read as 0025); kept wide so valid future statements aren't
+                # rejected. The statement's own date range is the real anchor below.
+                if 2000 <= parsed_date.year <= 2100:
                     return parsed_date
                 # If year is unreasonable but we have statement dates, use those
-                if self.start_date and 2020 <= self.start_date.year <= 2030:
+                if self.start_date and 2000 <= self.start_date.year <= 2100:
                     return parsed_date.replace(year=self.start_date.year)
             except ValueError:
                 continue

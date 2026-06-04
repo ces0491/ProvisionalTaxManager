@@ -30,6 +30,19 @@ class TestBankStatementParser:
         assert parser._parse_date('15 Mar 25') == date(2025, 3, 15)
         assert parser._parse_date('01 Apr 25') == date(2025, 4, 1)
 
+    def test_parse_date_future_year_not_rejected(self):
+        """Years past the old 2030 ceiling must still parse (sanity window is 2000-2100)."""
+        parser = BankStatementParser('dummy.pdf')
+        assert parser._parse_date('15 Mar 31') == date(2031, 3, 15)
+        assert parser._parse_date('01 Jan 2099') == date(2099, 1, 1)
+
+    def test_parse_date_falls_back_to_statement_year(self):
+        """A grossly mis-parsed year is remapped onto the statement's own year."""
+        parser = BankStatementParser('dummy.pdf')
+        parser.start_date = date(2026, 3, 1)
+        # 1905 is outside the sanity window; should be remapped to the statement year.
+        assert parser._parse_date('10 Jun 1905').year == 2026
+
 
 class TestDetectDuplicates:
     """Test duplicate transaction detection"""
