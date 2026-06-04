@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Provisional Summary{% endblock %}
+
+{% macro money(v) %}{{ "{:,.2f}".format(v) }}{% endmacro %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap mb-2">
+    <h1 class="mb-0"><i class="bi bi-clipboard-data"></i> Provisional Tax Summary</h1>
+    <a href="{{ url_for('export', year=selected_year, period=selected_period) }}"
+       class="btn btn-success">
+        <i class="bi bi-file-earmark-excel"></i> Export for practitioner
+    </a>
+</div>
+<p class="text-muted">
+    {{ summary.start_date.strftime('%d %b %Y') }} – {{ summary.end_date.strftime('%d %b %Y') }}
+    &middot; same figures as the Excel export
+</p>
+
+<form method="GET" class="row g-2 align-items-end mb-4">
+    <div class="col-auto">
+        <label class="form-label small mb-1">Tax year</label>
+        <select name="year" class="form-select form-select-sm">
+            {% for ty in tax_years %}
+            <option value="{{ ty }}" {% if ty == selected_year %}selected{% endif %}>
+                {{ ty }} ({{ ty - 1 }}/{{ ty }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label small mb-1">Period</label>
+        <select name="period" class="form-select form-select-sm">
+            <option value="first" {% if selected_period == 'first' %}selected{% endif %}>1st (Mar–Aug)</option>
+            <option value="second" {% if selected_period == 'second' %}selected{% endif %}>2nd (Sep–Feb)</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">View</button>
+    </div>
+</form>
+
+<div class="row">
+    <!-- Income + Expenses + Net -->
+    <div class="col-lg-7">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white"><strong>Income</strong></div>
+            <table class="table table-sm mb-0">
+                <tbody>
+                {% for label, amount in summary.income_by_month %}
+                    <tr><td>{{ label }}</td><td class="text-end">R {{ money(amount) }}</td></tr>
+                {% endfor %}
+                    <tr class="table-light fw-bold">
+                        <td>Total Income</td><td class="text-end">R {{ money(summary.total_income) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white"><strong>Expenses (deductible)</strong></div>
+            <table class="table table-sm mb-0">
+                <tbody>
+                {% for cat, amount in summary.expenses %}
+                    <tr><td>{{ cat }}</td><td class="text-end">R {{ money(amount) }}</td></tr>
+                {% endfor %}
+                    <tr>
+                        <td>Home Office (apportioned)</td>
+                        <td class="text-end">R {{ money(summary.home_office_line) }}</td>
+                    </tr>
+                    <tr class="table-light fw-bold">
+                        <td>Total Expenses</td><td class="text-end">R {{ money(summary.total_expenses) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card mb-3 border-success">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <strong class="fs-5">Net Profit (period)</strong>
+                <strong class="fs-4 text-success">R {{ money(summary.net_profit) }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Home office + Medical -->
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white"><strong>Home Office Apportionment</strong></div>
+            <table class="table table-sm mb-0">
+                <tbody>
+                {% for cat, amount in summary.home_office.components %}
+                    <tr>
+                        <td>{% if cat == summary.insurance_category %}Insurance (building/contents){% else %}{{ cat }}{% endif %}</td>
+                        <td class="text-end">R {{ money(amount) }}</td>
+                    </tr>
+                {% endfor %}
+                    <tr class="fw-bold"><td>Subtotal</td><td class="text-end">R {{ money(summary.home_office.subtotal) }}</td></tr>
+                    <tr><td>Office / Home (m²)</td><td class="text-end">{{ summary.home_office.office_sqm }} / {{ summary.home_office.house_sqm }}</td></tr>
+                    <tr><td>Percentage claim</td><td class="text-end">{{ "{:.2%}".format(summary.home_office.office_pct) }}</td></tr>
+                    <tr class="table-light fw-bold"><td>Home Office deduction</td><td class="text-end">R {{ money(summary.home_office.deduction) }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark"><strong>Medical (tax credit – not a deduction)</strong></div>
+            <table class="table table-sm mb-0">
+                <tbody>
+                {% for cat, amount in summary.medical %}
+                    <tr><td>{{ cat }}</td><td class="text-end">R {{ money(amount) }}</td></tr>
+                {% else %}
+                    <tr><td colspan="2" class="text-muted">None in this period</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <div class="card-footer small text-muted">
+                Not deducted from income. Supports the medical tax credit, applied per member in the tax calculation.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audit trail: category x month -->
+<div class="card mb-3">
+    <div class="card-header">
+        <button class="btn btn-link p-0 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#gridCollapse">
+            <i class="bi bi-table"></i> Audit: deductible by category &times; month
+        </button>
+    </div>
+    <div id="gridCollapse" class="collapse show">
+        <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        {% for m in summary.months %}<th class="text-end">{{ m.strftime('%b %y') }}</th>{% endfor %}
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for r in summary.grid.rows %}
+                    <tr>
+                        <td>{{ r.category }}</td>
+                        {% for v in r.amounts %}<td class="text-end">{{ money(v) }}</td>{% endfor %}
+                        <td class="text-end fw-bold">{{ money(r.total) }}</td>
+                    </tr>
+                {% endfor %}
+                    <tr class="table-light fw-bold">
+                        <td>Monthly totals</td>
+                        {% for v in summary.grid.monthly_totals %}<td class="text-end">{{ money(v) }}</td>{% endfor %}
+                        <td class="text-end">{{ money(summary.grid.grand_total) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer small text-muted">
+            Qualifying amounts (insurance reduced to building/contents), before home-office apportionment.
+        </div>
+    </div>
+</div>
+
+<!-- Audit trail: transactions by month -->
+<div class="card mb-4">
+    <div class="card-header">
+        <button class="btn btn-link p-0 text-decoration-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#detailCollapse">
+            <i class="bi bi-list-ul"></i> Audit: transactions by month (statement amount &rarr; deductible)
+        </button>
+    </div>
+    <div id="detailCollapse" class="collapse">
+        <div class="card-body">
+        {% for m in summary.detail_by_month %}
+            {% if m.rows %}
+            <h6 class="mt-2">{{ m.month.strftime('%B %Y') }}</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-1">
+                    <thead>
+                        <tr>
+                            <th>Category</th><th>Description</th>
+                            <th class="text-end">Amount (R)</th><th class="text-end">Deductible (R)</th>
+                            <th>Date</th><th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for t in m.rows %}
+                        <tr {% if t.amount < 0 %}class="text-danger"{% endif %}>
+                            <td>{{ t.category }}</td>
+                            <td><small>{{ t.description[:60] }}</small></td>
+                            <td class="text-end">{{ money(t.amount) }}</td>
+                            <td class="text-end">{{ money(t.deductible) }}</td>
+                            <td><small>{{ t.date.strftime('%d %b') }}</small></td>
+                            <td><small>{{ t.source }}</small></td>
+                        </tr>
+                    {% endfor %}
+                        <tr class="table-light fw-bold">
+                            <td colspan="2">Subtotal</td>
+                            <td class="text-end">{{ money(m.gross_subtotal) }}</td>
+                            <td class="text-end">{{ money(m.deductible_subtotal) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -21,6 +21,7 @@ from src.services.categorizer import categorize_transaction, is_inter_account_tr
 from src.services.excel_export import generate_tax_export
 from src.services.tax_calculator import calculate_tax_from_transactions
 from src.services.reports import aggregate_transactions, get_available_years, get_transactions_for_year
+from src.services.provisional_summary import build_provisional_summary
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -597,6 +598,43 @@ def delete_receipt(id):
 
     flash('Receipt removed', 'success')
     return redirect(url_for('edit_transaction', id=transaction_id))
+
+
+@app.route('/provisional')
+@login_required
+def provisional():
+    """In-app provisional tax summary - the same figures as the Excel export,
+    so you can review on screen and only export to share with a practitioner.
+    `year` uses the END-year convention (2026 == the 2025/2026 tax year)."""
+    period_type = 'second' if request.args.get('period') == 'second' else 'first'
+    today = datetime.now().date()
+    current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    year = request.args.get('year', current_tax_year, type=int)
+    start_year = year - 1
+
+    if period_type == 'first':
+        start_date = datetime(start_year, 3, 1).date()
+        end_date = datetime(start_year, 8, 31).date()
+    else:
+        last_feb = 29 if calendar.isleap(year) else 28
+        start_date = datetime(start_year, 9, 1).date()
+        end_date = datetime(year, 2, last_feb).date()
+
+    transactions = Transaction.query.filter(
+        Transaction.is_deleted == False,  # noqa: E712
+        Transaction.is_duplicate == False,  # noqa: E712
+        Transaction.date >= start_date,
+        Transaction.date <= end_date,
+    ).order_by(Transaction.date).all()
+
+    summary = build_provisional_summary(transactions, start_date, end_date)
+
+    tax_years = get_available_years(db.session, Transaction)
+    if current_tax_year not in tax_years:
+        tax_years = sorted(set(tax_years) | {current_tax_year}, reverse=True)
+
+    return render_template('provisional.html', summary=summary, tax_years=tax_years,
+                           selected_year=year, selected_period=period_type)
 
 
 @app.route('/export')

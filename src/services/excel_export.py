@@ -15,9 +15,14 @@ from src.config import Config
 from src.services.tax_calculator import (
     HOME_OFFICE_CATEGORIES,
     INSURANCE_CATEGORY,
-    insurance_deductible_amount,
     DEFAULT_HOME_OFFICE_SQM,
     DEFAULT_HOUSE_TOTAL_SQM,
+)
+from src.services.provisional_summary import (
+    MEDICAL_CATEGORIES,
+    office_pct as _office_pct,
+    qualifying_deductible,
+    claimed_deductible,
 )
 
 
@@ -89,43 +94,6 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     output_path = os.path.join(tempfile.gettempdir(), filename)
     wb.save(output_path)
     return output_path
-
-
-# Medical categories: not deductible expenses. They feed the medical tax credit
-# (applied per member in the tax calculation), so they are reported in their own
-# section, never under Expenses.
-MEDICAL_CATEGORIES = {'Medical Aid', 'Medical Fees'}
-
-
-def _office_pct():
-    return (DEFAULT_HOME_OFFICE_SQM / DEFAULT_HOUSE_TOTAL_SQM) if DEFAULT_HOUSE_TOTAL_SQM else Decimal('0')
-
-
-def qualifying_deductible(t):
-    """Qualifying deductible portion of a transaction, BEFORE home-office
-    apportionment. Uses the signed expense impact (a debit is a positive
-    expense, a refund/credit is negative and nets it off). Insurance is reduced
-    to its deductible building/household-contents portion; non-business-expense
-    transactions (personal, medical, income) return 0. This is the audit bridge
-    from the statement amount to what qualifies."""
-    if not t.category or t.category.category_type != 'business_expense':
-        return Decimal('0')
-    amt = -Decimal(str(t.amount))  # debit -> positive expense; refund -> negative
-    if t.category.name == INSURANCE_CATEGORY:
-        return insurance_deductible_amount(t.description, amt)
-    return amt
-
-
-def claimed_deductible(t, office_pct=None):
-    """Final claimed amount: the qualifying portion, with home-office categories
-    (interest, rates, insurance) apportioned by the office percentage. Sums to
-    the Provisional Summary's total expenses."""
-    if office_pct is None:
-        office_pct = _office_pct()
-    q = qualifying_deductible(t)
-    if t.category and t.category.name in HOME_OFFICE_CATEGORIES:
-        return q * office_pct
-    return q
 
 
 def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
