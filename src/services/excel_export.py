@@ -234,6 +234,9 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
 
     ws.column_dimensions['A'].width = 34
     ws.column_dimensions['B'].width = 16
+
+    # Open the workbook on this summary sheet, not the detailed Tax Report.
+    wb.active = wb.index(ws)
     return ws
 
 
