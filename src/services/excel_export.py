@@ -15,7 +15,7 @@ from src.config import Config
 from src.services.tax_calculator import (
     HOME_OFFICE_CATEGORIES,
     INSURANCE_CATEGORY,
-    insurance_deductible_fraction,
+    insurance_deductible_amount,
     DEFAULT_HOME_OFFICE_SQM,
     DEFAULT_HOUSE_TOTAL_SQM,
 )
@@ -125,7 +125,7 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
             if cat in HOME_OFFICE_CATEGORIES:
                 base = amt
                 if cat == INSURANCE_CATEGORY:
-                    base = (amt * insurance_deductible_fraction(t.description)).quantize(Decimal('0.01'))
+                    base = insurance_deductible_amount(t.description, amt)
                 home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + base
             else:
                 expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + amt

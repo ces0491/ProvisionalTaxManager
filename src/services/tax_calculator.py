@@ -277,7 +277,6 @@ class SATaxCalculator:
 # Categories that should be apportioned based on home office percentage
 HOME_OFFICE_CATEGORIES = [
     'Interest (Mortgage)',
-    'Maintenance',
     'Municipal',
     'Insurance',
 ]
@@ -289,27 +288,33 @@ DEFAULT_HOUSE_TOTAL_SQM = Decimal('268.5')
 # Category whose amounts may be only partly deductible insurance.
 INSURANCE_CATEGORY = 'Insurance'
 
-# Of an insurance premium, the fraction that is deductible building / household-
-# contents cover (home-office apportioned). The remainder (motor, personal
-# liability, life, etc.) is private and not deductible. Matched on the
-# transaction description (first matching substring wins); anything not listed
-# is treated as fully deductible building cover (e.g. bond homeowner's cover).
-# Source: Discovery Insure plan schedule 4001274505 - household contents premium
-# R871.70 of the R2,694.91 total monthly premium.
-INSURANCE_DEDUCTIBLE_FRACTIONS = [
-    ('DISCLIFE', Decimal('0')),                              # life cover: never deductible
-    ('DISCINSURE', Decimal('871.70') / Decimal('2694.91')),  # contents portion only
+# Deductible insurance = the building / household-contents portion of a premium
+# (home-office apportioned). The private remainder (motor, personal liability,
+# life) is excluded. Each rule maps a description substring to the deductible
+# portion, given either as a fixed monthly Rand amount (when that portion is
+# stable while the total premium varies) or a fraction of the debit. The first
+# matching substring wins; anything not listed is treated as fully deductible
+# building cover.
+# Sources: Discovery Insure plan schedule 4001274505 - the household-contents
+# premium is R871.70/month and is stable, while the total Discovery premium
+# varied with vehicle count; the motor portion is excluded as the vehicle is not
+# used regularly for work. Standard Bank home-loan statement - "INSURANCE
+# PREMIUM - IP" is the building/homeowner's cover and is fully deductible.
+INSURANCE_DEDUCTIBLE_RULES = [
+    ('DISCLIFE', {'amount': Decimal('0')}),         # life cover: never deductible
+    ('DISCINSURE', {'amount': Decimal('871.70')}),  # household contents only (car excluded)
 ]
-DEFAULT_INSURANCE_FRACTION = Decimal('1')
 
 
-def insurance_deductible_fraction(description: str) -> Decimal:
-    """Fraction of an insurance premium that is deductible building/contents cover."""
+def insurance_deductible_amount(description, full_amount: Decimal) -> Decimal:
+    """Deductible building / household-contents portion of an insurance premium."""
     desc = (description or '').upper()
-    for pattern, fraction in INSURANCE_DEDUCTIBLE_FRACTIONS:
+    for pattern, rule in INSURANCE_DEDUCTIBLE_RULES:
         if pattern in desc:
-            return fraction
-    return DEFAULT_INSURANCE_FRACTION
+            if 'amount' in rule:
+                return min(rule['amount'], full_amount)
+            return (full_amount * rule['fraction']).quantize(Decimal('0.01'))
+    return full_amount
 
 
 def calculate_tax_from_transactions(
@@ -424,9 +429,7 @@ def calculate_tax_from_transactions(
                 # cover); the private remainder (motor, liability, life) is
                 # dropped before apportionment.
                 if category == INSURANCE_CATEGORY:
-                    deductible_base = (
-                        full_amount * insurance_deductible_fraction(trans.get('description'))
-                    ).quantize(Decimal('0.01'))
+                    deductible_base = insurance_deductible_amount(trans.get('description'), full_amount)
                 else:
                     deductible_base = full_amount
 

@@ -110,8 +110,10 @@ CATEGORIES = {
         'patterns': ['ATTORNEY', 'LEGAL', 'LAW FIRM', 'ADVOCATE'],
     },
     'maintenance': {
+        # Home/garden maintenance is not claimed (per practitioner treatment) -
+        # kept as a non-deductible personal expense.
         'name': 'Maintenance',
-        'type': 'business_expense',
+        'type': 'personal_expense',
         'patterns': [
             'POINT GARDEN',
             'LIQUID RAIN', 'JOYCE THINDWA',
