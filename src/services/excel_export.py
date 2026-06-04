@@ -46,8 +46,21 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     last_month_in_period = months_in_period[-1]
     needs_extrapolation = last_month_in_period >= current_month
 
-    # Build the 11 tables
-    row = 1
+    # Sheet title + audit legend
+    office_pct = _office_pct()
+    ws['A1'] = f'{Config.BUSINESS_NAME} - Detailed Tax Report'
+    ws['A1'].font = Font(bold=True, size=14)
+    ws['A2'] = (
+        'Amount (R) = amount on the bank statement.  Deductible (R) = qualifying '
+        'portion (insurance reduced to building/household-contents; car & life '
+        'excluded).  Home-office categories (Interest, Municipal, Insurance) are '
+        f'further apportioned at {float(office_pct):.2%} - see Annual Summary and '
+        'the Provisional Summary sheet.'
+    )
+    ws['A2'].font = Font(italic=True, size=9)
+
+    # Build the tables
+    row = 4
 
     # TABLE 1: Monthly Income Summary
     row = write_table1_income_summary(ws, row, trans_by_month, months_in_period, needs_extrapolation)
@@ -82,6 +95,37 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
 # (applied per member in the tax calculation), so they are reported in their own
 # section, never under Expenses.
 MEDICAL_CATEGORIES = {'Medical Aid', 'Medical Fees'}
+
+
+def _office_pct():
+    return (DEFAULT_HOME_OFFICE_SQM / DEFAULT_HOUSE_TOTAL_SQM) if DEFAULT_HOUSE_TOTAL_SQM else Decimal('0')
+
+
+def qualifying_deductible(t):
+    """Qualifying deductible portion of a transaction, BEFORE home-office
+    apportionment. Uses the signed expense impact (a debit is a positive
+    expense, a refund/credit is negative and nets it off). Insurance is reduced
+    to its deductible building/household-contents portion; non-business-expense
+    transactions (personal, medical, income) return 0. This is the audit bridge
+    from the statement amount to what qualifies."""
+    if not t.category or t.category.category_type != 'business_expense':
+        return Decimal('0')
+    amt = -Decimal(str(t.amount))  # debit -> positive expense; refund -> negative
+    if t.category.name == INSURANCE_CATEGORY:
+        return insurance_deductible_amount(t.description, amt)
+    return amt
+
+
+def claimed_deductible(t, office_pct=None):
+    """Final claimed amount: the qualifying portion, with home-office categories
+    (interest, rates, insurance) apportioned by the office percentage. Sums to
+    the Provisional Summary's total expenses."""
+    if office_pct is None:
+        office_pct = _office_pct()
+    q = qualifying_deductible(t)
+    if t.category and t.category.name in HOME_OFFICE_CATEGORIES:
+        return q * office_pct
+    return q
 
 
 def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
@@ -134,13 +178,13 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
             key = t.date.strftime('%Y-%m')
             income_by_month[key] = income_by_month.get(key, Decimal('0')) + amt
         elif ctype == 'business_expense':
+            # Signed, insurance-split deductible (refunds net off); same helper
+            # the detailed Tax Report uses, so the two sheets reconcile.
+            q = qualifying_deductible(t)
             if cat in HOME_OFFICE_CATEGORIES:
-                base = amt
-                if cat == INSURANCE_CATEGORY:
-                    base = insurance_deductible_amount(t.description, amt)
-                home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + base
+                home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + q
             else:
-                expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + amt
+                expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + q
         # personal / excluded (non-medical) expenses are intentionally omitted
 
     ho_subtotal = sum(home_office_base.values(), Decimal('0'))
@@ -323,45 +367,48 @@ def write_month_detail_table(ws, start_row, month, transactions):
     month_name = month.strftime('%B %Y')
 
     # Header
-    ws.merge_cells(f'A{row}:E{row}')
+    ws.merge_cells(f'A{row}:F{row}')
     ws[f'A{row}'] = f'Business Expenses for {month_name}'
     ws[f'A{row}'].font = Font(bold=True, size=12)
     row += 1
 
-    # Column headers
-    headers = ['Category', 'Description', 'Amount (R)', 'Date', 'Source']
+    # Column headers: statement amount AND the qualifying deductible portion
+    headers = ['Category', 'Description', 'Amount (R)', 'Deductible (R)', 'Date', 'Source']
     for col, header in enumerate(headers, start=1):
         cell = ws.cell(row=row, column=col)
         cell.value = header
         cell.font = Font(bold=True)
     row += 1
 
-    # Business expenses
-    ws.cell(row=row, column=1).value = 'BUSINESS EXPENSES'
-    ws.cell(row=row, column=1).font = Font(bold=True, underline='single')
-    row += 1
-
     business_trans = [t for t in transactions
-                     if t.category and t.category.category_type == 'business_expense'
-                     and float(t.amount) < 0]
-    business_total = Decimal('0')
+                     if t.category and t.category.category_type == 'business_expense']
+    gross_total = Decimal('0')
+    deductible_total = Decimal('0')
 
     for trans in business_trans:
+        gross = -Decimal(str(trans.amount))  # signed expense impact (refund = negative)
+        ded = qualifying_deductible(trans)
         ws.cell(row=row, column=1).value = trans.category.name
         ws.cell(row=row, column=2).value = trans.description
-        ws.cell(row=row, column=3).value = abs(float(trans.amount))
+        ws.cell(row=row, column=3).value = float(gross)
         ws.cell(row=row, column=3).number_format = '#,##0.00'
-        ws.cell(row=row, column=4).value = trans.date.strftime('%d-%b')
-        ws.cell(row=row, column=5).value = f"{trans.statement.account.account_type}"
-        business_total += abs(trans.amount)
+        ws.cell(row=row, column=4).value = float(ded)
+        ws.cell(row=row, column=4).number_format = '#,##0.00'
+        ws.cell(row=row, column=5).value = trans.date.strftime('%d-%b')
+        ws.cell(row=row, column=6).value = f"{trans.statement.account.account_type}"
+        gross_total += gross
+        deductible_total += ded
         row += 1
 
-    # Business subtotal
-    ws.cell(row=row, column=1).value = 'SUBTOTAL BUSINESS'
+    # Subtotal (statement amount and qualifying deductible)
+    ws.cell(row=row, column=1).value = 'SUBTOTAL'
     ws.cell(row=row, column=1).font = Font(bold=True)
-    ws.cell(row=row, column=3).value = float(business_total)
+    ws.cell(row=row, column=3).value = float(gross_total)
     ws.cell(row=row, column=3).number_format = '#,##0.00'
     ws.cell(row=row, column=3).font = Font(bold=True)
+    ws.cell(row=row, column=4).value = float(deductible_total)
+    ws.cell(row=row, column=4).number_format = '#,##0.00'
+    ws.cell(row=row, column=4).font = Font(bold=True)
     row += 1
 
     # Personal/non-deductible expenses are intentionally not listed.
@@ -374,8 +421,13 @@ def write_table8_business_summary(ws, start_row, trans_by_month, months):
 
     # Header
     ws.merge_cells(f'A{row}:H{row}')
-    ws[f'A{row}'] = 'Table 8: Monthly Business Expense Summary'
+    ws[f'A{row}'] = 'Table 8: Deductible Business Expenses by Category and Month'
     ws[f'A{row}'].font = Font(bold=True, size=14)
+    row += 1
+    ws.cell(row=row, column=1).value = (
+        'Qualifying amounts (insurance split applied), before home-office apportionment.'
+    )
+    ws.cell(row=row, column=1).font = Font(italic=True, size=9)
     row += 1
 
     # Column headers
@@ -390,23 +442,27 @@ def write_table8_business_summary(ws, start_row, trans_by_month, months):
     ws.cell(row=row, column=len(months) + 2).font = Font(bold=True)
     row += 1
 
-    # Category rows
+    # Category rows (only categories that actually have deductible amounts)
     from src.services.categorizer import CATEGORIES
     business_categories = [cat['name'] for cat in CATEGORIES.values() if cat['type'] == 'business_expense']
 
     for cat_name in business_categories:
-        ws.cell(row=row, column=1).value = cat_name
+        cat_cells = []
         row_total = Decimal('0')
-
-        for col, month in enumerate(months, start=2):
-            month_trans = [t for t in trans_by_month[month]
-                          if t.category and t.category.name == cat_name
-                          and float(t.amount) < 0]
-            month_total = sum([abs(t.amount) for t in month_trans], Decimal('0'))
+        for month in months:
+            month_total = sum(
+                (qualifying_deductible(t) for t in trans_by_month[month]
+                 if t.category and t.category.name == cat_name),
+                Decimal('0'),
+            )
+            cat_cells.append(month_total)
+            row_total += month_total
+        if row_total == 0:
+            continue  # skip categories with no activity in the period
+        ws.cell(row=row, column=1).value = cat_name
+        for col, month_total in enumerate(cat_cells, start=2):
             ws.cell(row=row, column=col).value = float(month_total)
             ws.cell(row=row, column=col).number_format = '#,##0.00'
-            row_total += month_total
-
         ws.cell(row=row, column=len(months) + 2).value = float(row_total)
         ws.cell(row=row, column=len(months) + 2).number_format = '#,##0.00'
         row += 1
@@ -414,23 +470,29 @@ def write_table8_business_summary(ws, start_row, trans_by_month, months):
     # Monthly totals row
     ws.cell(row=row, column=1).value = 'MONTHLY TOTALS'
     ws.cell(row=row, column=1).font = Font(bold=True)
-
+    grand_total = Decimal('0')
     for col, month in enumerate(months, start=2):
-        month_trans = [t for t in trans_by_month[month]
-                      if t.category and t.category.category_type == 'business_expense'
-                      and float(t.amount) < 0]
-        month_total = sum([abs(t.amount) for t in month_trans], Decimal('0'))
+        month_total = sum(
+            (qualifying_deductible(t) for t in trans_by_month[month]
+             if t.category and t.category.category_type == 'business_expense'),
+            Decimal('0'),
+        )
         ws.cell(row=row, column=col).value = float(month_total)
         ws.cell(row=row, column=col).number_format = '#,##0.00'
         ws.cell(row=row, column=col).font = Font(bold=True)
+        grand_total += month_total
+    ws.cell(row=row, column=len(months) + 2).value = float(grand_total)
+    ws.cell(row=row, column=len(months) + 2).number_format = '#,##0.00'
+    ws.cell(row=row, column=len(months) + 2).font = Font(bold=True)
 
     row += 1
     return row
 
 
 def write_table10_net_profit(ws, start_row, trans_by_month, months):
-    """Table 10: Monthly Net Profit Summary"""
+    """Table 9: Monthly Net Profit Summary (deductible expenses, after home-office apportionment)."""
     row = start_row
+    office_pct = _office_pct()
 
     # Header
     ws.merge_cells(f'A{row}:D{row}')
@@ -439,7 +501,7 @@ def write_table10_net_profit(ws, start_row, trans_by_month, months):
     row += 1
 
     # Column headers
-    headers = ['Month', 'Income (R)', 'Business Expenses (R)', 'Net Profit (R)']
+    headers = ['Month', 'Income (R)', 'Deductible Expenses (R)', 'Net Profit (R)']
     for col, header in enumerate(headers, start=1):
         cell = ws.cell(row=row, column=col)
         cell.value = header
@@ -455,11 +517,12 @@ def write_table10_net_profit(ws, start_row, trans_by_month, months):
                        if t.category and t.category.category_type == 'income']
         month_income = sum([t.amount for t in income_trans], Decimal('0'))
 
-        # Business expenses
-        expense_trans = [t for t in trans_by_month[month]
-                        if t.category and t.category.category_type == 'business_expense'
-                        and float(t.amount) < 0]
-        month_expenses = sum([abs(t.amount) for t in expense_trans], Decimal('0'))
+        # Deductible expenses (insurance split + home-office apportionment)
+        month_expenses = sum(
+            (claimed_deductible(t, office_pct) for t in trans_by_month[month]
+             if t.category and t.category.category_type == 'business_expense'),
+            Decimal('0'),
+        )
 
         net_profit = month_income - month_expenses
 
@@ -502,24 +565,30 @@ def write_table11_annual_summary(ws, start_row, trans_by_month, start_date, end_
     ws[f'A{row}'].font = Font(bold=True, size=14)
     row += 1
 
-    # Calculate totals from all months
+    office_pct = _office_pct()
+
+    # Calculate totals from all months, bridging gross -> qualifying -> claimed.
     all_income = Decimal('0')
-    all_expenses = Decimal('0')
+    qualifying = Decimal('0')        # deductible portion before apportionment
+    ho_qualifying = Decimal('0')     # the home-office part of qualifying
 
     for month_trans in trans_by_month.values():
-        income_trans = [t for t in month_trans
-                       if t.category and t.category.category_type == 'income']
-        all_income += sum([t.amount for t in income_trans], Decimal('0'))
+        all_income += sum(
+            (t.amount for t in month_trans
+             if t.category and t.category.category_type == 'income'),
+            Decimal('0'),
+        )
+        for t in month_trans:
+            if t.category and t.category.category_type == 'business_expense':
+                q = qualifying_deductible(t)
+                qualifying += q
+                if t.category.name in HOME_OFFICE_CATEGORIES:
+                    ho_qualifying += q
 
-        expense_trans = [t for t in month_trans
-                        if t.category and t.category.category_type == 'business_expense'
-                        and float(t.amount) < 0]
-        all_expenses += sum([abs(t.amount) for t in expense_trans], Decimal('0'))
-
-    # Annualize (multiply by 2 since this is 6 months)
-    annualized_income = all_income * 2
-    annualized_expenses = all_expenses * 2
-    annualized_profit = annualized_income - annualized_expenses
+    # Home-office apportionment removes the non-office share of home-office items.
+    apportionment_adj = (ho_qualifying * (Decimal('1') - office_pct)).quantize(Decimal('0.01'))
+    deductible = (qualifying - apportionment_adj).quantize(Decimal('0.01'))
+    net_profit = (all_income - deductible).quantize(Decimal('0.01'))
 
     ws.cell(row=row, column=1).value = 'Description'
     ws.cell(row=row, column=1).font = Font(bold=True)
@@ -527,40 +596,28 @@ def write_table11_annual_summary(ws, start_row, trans_by_month, start_date, end_
     ws.cell(row=row, column=2).font = Font(bold=True)
     row += 1
 
-    ws.cell(row=row, column=1).value = f'Period Income ({start_date.strftime("%b %Y")} - {end_date.strftime("%b %Y")})'
-    ws.cell(row=row, column=2).value = float(all_income)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
+    period = f'{start_date.strftime("%b %Y")} - {end_date.strftime("%b %Y")}'
+
+    def line(label, value, bold=False):
+        nonlocal row
+        ws.cell(row=row, column=1).value = label
+        c = ws.cell(row=row, column=2)
+        c.value = float(value)
+        c.number_format = '#,##0.00'
+        if bold:
+            ws.cell(row=row, column=1).font = Font(bold=True)
+            c.font = Font(bold=True)
+        row += 1
+
+    line(f'Period Income ({period})', all_income)
+    line('Qualifying expenses (before home-office apportionment)', qualifying)
+    line(f'Less home-office apportionment ({float(1 - office_pct):.2%} of home-office items)', -apportionment_adj)
+    line('Deductible expenses (claimed)', deductible, bold=True)
+    line('Period Net Profit', net_profit, bold=True)
     row += 1
 
-    ws.cell(row=row, column=1).value = f'Period Expenses ({start_date.strftime("%b %Y")} - {end_date.strftime("%b %Y")})'
-    ws.cell(row=row, column=2).value = float(all_expenses)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
-    row += 1
-
-    ws.cell(row=row, column=1).value = 'Period Net Profit'
-    ws.cell(row=row, column=2).value = float(all_income - all_expenses)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
-    row += 2
-
-    ws.cell(row=row, column=1).value = 'Annualized Income (Projected)'
-    ws.cell(row=row, column=1).font = Font(bold=True)
-    ws.cell(row=row, column=2).value = float(annualized_income)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
-    ws.cell(row=row, column=2).font = Font(bold=True)
-    row += 1
-
-    ws.cell(row=row, column=1).value = 'Annualized Expenses (Projected)'
-    ws.cell(row=row, column=1).font = Font(bold=True)
-    ws.cell(row=row, column=2).value = float(annualized_expenses)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
-    ws.cell(row=row, column=2).font = Font(bold=True)
-    row += 1
-
-    ws.cell(row=row, column=1).value = 'Annualized Net Profit (for Provisional Tax)'
-    ws.cell(row=row, column=1).font = Font(bold=True)
-    ws.cell(row=row, column=2).value = float(annualized_profit)
-    ws.cell(row=row, column=2).number_format = '#,##0.00'
-    ws.cell(row=row, column=2).font = Font(bold=True)
-    row += 1
+    line('Annualized Income (projected x2)', all_income * 2, bold=True)
+    line('Annualized Deductible Expenses (x2)', deductible * 2, bold=True)
+    line('Annualized Net Profit (for provisional tax)', net_profit * 2, bold=True)
 
     return row
