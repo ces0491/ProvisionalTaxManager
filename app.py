@@ -93,15 +93,20 @@ def index():
         is_duplicate=False
     ).count()
 
-    # Current tax year (END-year convention) for the export shortcuts
+    # Tax years (END-year convention) for the export shortcuts. Always include
+    # the current tax year so it is selectable even with no transactions yet.
     today = datetime.now().date()
     current_tax_year = today.year + 1 if today.month >= 3 else today.year
+    tax_years = get_available_years(db.session, Transaction)
+    if current_tax_year not in tax_years:
+        tax_years = sorted(set(tax_years) | {current_tax_year}, reverse=True)
 
     return render_template('index.html',
                          statements=statements,
                          total_transactions=total_transactions,
                          uncategorized=uncategorized,
-                         current_tax_year=current_tax_year)
+                         current_tax_year=current_tax_year,
+                         tax_years=tax_years)
 
 
 @app.route('/reports')

@@ -71,13 +71,19 @@
                 <div class="card-body">
                     <h5 class="card-title"><i class="bi bi-file-earmark-excel"></i> Export Report</h5>
                     <p class="card-text">Generate Excel report for tax practitioner</p>
-                    <div class="btn-group-vertical w-100">
-                        <a href="{{ url_for('export', period='first', year=current_tax_year) }}" class="btn btn-success btn-sm">
-                            First Provisional (Mar-Aug {{ current_tax_year - 1 }})
-                        </a>
-                        <a href="{{ url_for('export', period='second', year=current_tax_year) }}" class="btn btn-success btn-sm">
-                            Second Provisional (Sep {{ current_tax_year - 1 }} - Feb {{ current_tax_year }})
-                        </a>
+                    <div class="mb-2">
+                        <label for="exportTaxYear" class="form-label small mb-1">Tax year</label>
+                        <select id="exportTaxYear" class="form-select form-select-sm">
+                            {% for ty in tax_years %}
+                            <option value="{{ ty }}" {% if ty == current_tax_year %}selected{% endif %}>
+                                {{ ty }} ({{ ty - 1 }}/{{ ty }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="btn-group-vertical w-100" data-export-url="{{ url_for('export') }}">
+                        <a id="exportFirst" href="#" class="btn btn-success btn-sm"></a>
+                        <a id="exportSecond" href="#" class="btn btn-success btn-sm"></a>
                     </div>
                 </div>
             </div>
@@ -112,4 +118,28 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Point the export buttons at the selected tax year (END-year convention:
+    // 2026 == the 2025/2026 tax year, i.e. 1 Mar 2025 - 28 Feb 2026).
+    (function () {
+        const sel = document.getElementById('exportTaxYear');
+        const group = document.querySelector('[data-export-url]');
+        const baseUrl = group.getAttribute('data-export-url');
+        const first = document.getElementById('exportFirst');
+        const second = document.getElementById('exportSecond');
+
+        function update() {
+            const y = parseInt(sel.value, 10);
+            first.href = `${baseUrl}?period=first&year=${y}`;
+            first.textContent = `First Provisional (Mar-Aug ${y - 1})`;
+            second.href = `${baseUrl}?period=second&year=${y}`;
+            second.textContent = `Second Provisional (Sep ${y - 1} - Feb ${y})`;
+        }
+        sel.addEventListener('change', update);
+        update();
+    })();
+</script>
 {% endblock %}
