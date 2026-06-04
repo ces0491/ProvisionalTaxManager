@@ -92,3 +92,7 @@ Desktop.ini
 
 # Claude Code
 .claude
+
+# Personal / private notes - never committed (e.g. individual tax guide)
+private/
+*.private.md

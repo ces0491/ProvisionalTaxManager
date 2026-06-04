@@ -24,9 +24,15 @@ transaction categorization, and tax report generation.
 - **Tax Calculator**: Calculate provisional tax liability using database-driven
   SARS tax tables (2025/2026 and 2026/2027) with rebates and credits. The first
   provisional period pays 50% of the annual estimate; the second pays the balance
-- **Excel Export**: Generates comprehensive 11-table tax reports in native
-  Excel format
-- **Tax Periods**: Supports both provisional tax periods (Mar-Aug, Sep-Feb)
+- **Home Office Apportionment**: Apportions qualifying home expenses (bond
+  interest, rates, building/contents insurance) by office-to-home floor area;
+  insurance is reduced to its deductible building/contents portion, with motor
+  and life cover excluded
+- **Excel Export**: Generates a tax-practitioner workbook — a one-page
+  Provisional Summary (income, deductible expenses, home-office box) plus a
+  detailed 11-table breakdown
+- **Tax Periods**: Supports both provisional tax periods (Mar-Aug, Sep-Feb),
+  selectable per tax year
 - **Extrapolation**: Automatically projects incomplete months for current period
 - **Security**: CSRF protection on all forms and APIs, rate-limited login, and
   hardened session cookies
@@ -202,7 +208,7 @@ transaction categorization, and tax report generation.
 ### 8. Export Tax Report
 
 - Go to **Dashboard**
-- Under "Export Report", choose:
+- Under "Export Report", select the **tax year**, then choose:
   - **First Provisional** (Mar-Aug for August submission)
   - **Second Provisional** (Sep-Feb for February submission)
 - Download the Excel file
@@ -210,7 +216,16 @@ transaction categorization, and tax report generation.
 
 ## Excel Export Format
 
-The generated Excel file contains 11 tables as per requirements:
+The workbook opens on a **Provisional Summary** sheet laid out for a tax
+practitioner:
+
+- Monthly income summary
+- Deductible expense lines (full amounts)
+- A home-office apportionment box (qualifying home expenses × office %), rolled
+  into a single "Home Office" expense line
+- Period net profit
+
+A second **Tax Report** sheet contains the detailed 11-table breakdown:
 
 1. **Table 1**: Monthly Income Summary
 2. **Tables 2-7**: Individual month expense details (one per month)
