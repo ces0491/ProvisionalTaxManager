@@ -128,6 +128,7 @@ python app.py              # Recreate on startup
 |---------|---------|-------|
 | New tax year | `scripts/seed_tax_tables.py` | Add a `seed_<start_year>_tax_year()` function (year = start calendar year), call it from `__main__`, run |
 | New VAT rate | `scripts/seed_vat_config.py` | Add VATConfig record with dates |
-| New category | `app.py` or database | Via `/income_sources` UI or seed script |
+| New category | `src/services/categorizer.py` | Add a `CATEGORIES` entry (set `'apportion': True` if home-office apportioned). Seeded into the database on app start; run `flask recategorize --all` to apply it to statements already imported |
+| New matching rule for an existing category | `/income_sources` UI | Creates an `ExpenseRule`, which takes priority over the `CATEGORIES` patterns |
 | New route/page | `app.py`, `templates/` | Follow existing patterns |
 | New calculation | `src/services/` | Follow `tax_calculator.py` structure |

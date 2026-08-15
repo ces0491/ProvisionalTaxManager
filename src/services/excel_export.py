@@ -15,11 +15,9 @@ from src.config import Config
 from src.services.tax_calculator import (
     HOME_OFFICE_CATEGORIES,
     INSURANCE_CATEGORY,
-    DEFAULT_HOME_OFFICE_SQM,
-    DEFAULT_HOUSE_TOTAL_SQM,
 )
 from src.services.provisional_summary import (
-    MEDICAL_CATEGORIES,
+    build_provisional_summary,
     office_pct as _office_pct,
     qualifying_deductible,
     claimed_deductible,
@@ -58,9 +56,9 @@ def generate_tax_export(db, Transaction, Category, start_date, end_date, filenam
     ws['A2'] = (
         'Amount (R) = amount on the bank statement.  Deductible (R) = qualifying '
         'portion (insurance reduced to building/household-contents; car & life '
-        'excluded).  Home-office categories (Interest, Municipal, Insurance) are '
-        f'further apportioned at {float(office_pct):.2%} - see Annual Summary and '
-        'the Provisional Summary sheet.'
+        f'excluded).  Home-office categories ({", ".join(HOME_OFFICE_CATEGORIES)}) '
+        f'are further apportioned at {float(office_pct):.2%} - see Annual Summary '
+        'and the Provisional Summary sheet.'
     )
     ws['A2'].font = Font(italic=True, size=9)
 
@@ -102,19 +100,25 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     Organised into three groups, matching how a tax practitioner reads it:
       - Expenses: deductible business expenses (full amounts), with home-office
         categories rolled into a single apportioned 'Home Office' line.
-      - Home Office Apportionment: the building blocks of that line (interest,
-        rates, deductible insurance) x office percentage. Insurance is reduced to
+      - Home Office Apportionment: the building blocks of that line
+        (HOME_OFFICE_CATEGORIES) x office percentage. Insurance is reduced to
         its deductible building/household-contents portion first.
       - Medical: scheme contributions and out-of-pocket fees, shown for
         information only - these support the medical tax credit and are NOT
         deducted from income.
     Personal (non-deductible, non-medical) expenses are excluded entirely.
+
+    The figures come from build_provisional_summary, the same call the in-app
+    Provisional view renders, so the screen and the workbook cannot drift.
     """
     ws = wb.create_sheet('Provisional Summary', 0)
 
-    office_sqm = DEFAULT_HOME_OFFICE_SQM
-    house_sqm = DEFAULT_HOUSE_TOTAL_SQM
-    office_pct = (office_sqm / house_sqm) if house_sqm else Decimal('0')
+    summary = build_provisional_summary(transactions, start_date, end_date)
+    ho = summary['home_office']
+    office_sqm = ho['office_sqm']
+    house_sqm = ho['house_sqm']
+    office_pct = ho['office_pct']
+    home_office_deduction = ho['deduction']
 
     bold = Font(bold=True)
     title = Font(bold=True, size=14)
@@ -125,41 +129,6 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
         cell = ws.cell(row, 2, float(value))
         cell.number_format = '#,##0.00'
         return cell
-
-    # --- Aggregate ---
-    income_by_month = {}      # 'YYYY-MM' -> Decimal
-    expense_by_category = {}  # deductible (non-home-office, non-medical) business expense -> Decimal
-    home_office_base = {}     # home-office category -> deductible base Decimal
-    medical_by_category = {}  # medical category -> Decimal (informational, not deducted)
-
-    for t in transactions:
-        if t.is_deleted or t.is_duplicate:
-            continue
-        cat = t.category.name if t.category else 'Uncategorized'
-        ctype = t.category.category_type if t.category else 'personal_expense'
-        amt = abs(Decimal(str(t.amount)))
-
-        # Medical is pulled out regardless of stored type (credit, not a deduction)
-        if cat in MEDICAL_CATEGORIES:
-            medical_by_category[cat] = medical_by_category.get(cat, Decimal('0')) + amt
-        elif ctype == 'income':
-            key = t.date.strftime('%Y-%m')
-            income_by_month[key] = income_by_month.get(key, Decimal('0')) + amt
-        elif ctype == 'business_expense':
-            # Signed, insurance-split deductible (refunds net off); same helper
-            # the detailed Tax Report uses, so the two sheets reconcile.
-            q = qualifying_deductible(t)
-            if cat in HOME_OFFICE_CATEGORIES:
-                home_office_base[cat] = home_office_base.get(cat, Decimal('0')) + q
-            else:
-                expense_by_category[cat] = expense_by_category.get(cat, Decimal('0')) + q
-        # personal / excluded (non-medical) expenses are intentionally omitted
-
-    ho_subtotal = sum(home_office_base.values(), Decimal('0'))
-    home_office_deduction = (ho_subtotal * office_pct).quantize(Decimal('0.01'))
-    total_income = sum(income_by_month.values(), Decimal('0'))
-    total_expenses = sum(expense_by_category.values(), Decimal('0')) + home_office_deduction
-    net_profit = total_income - total_expenses
 
     # --- Write ---
     r = 1
@@ -175,12 +144,12 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     c.font = bold
     c.fill = header_fill
     r += 1
-    for key in sorted(income_by_month):
-        ws.cell(r, 1, datetime.strptime(key, '%Y-%m').strftime('%b %Y'))
-        money(r, income_by_month[key])
+    for label, amount in summary['income_by_month']:
+        ws.cell(r, 1, label)
+        money(r, amount)
         r += 1
     ws.cell(r, 1, 'Total Income').font = bold
-    money(r, total_income).font = bold
+    money(r, summary['total_income']).font = bold
     r += 2
 
     # Expenses (deductible)
@@ -188,19 +157,19 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     c.font = bold
     c.fill = header_fill
     r += 1
-    for cat in sorted(expense_by_category):
+    for cat, amount in summary['expenses']:
         ws.cell(r, 1, cat)
-        money(r, expense_by_category[cat])
+        money(r, amount)
         r += 1
     ws.cell(r, 1, 'Home Office (apportioned)')
     money(r, home_office_deduction)
     r += 1
     ws.cell(r, 1, 'Total Expenses').font = bold
-    money(r, total_expenses).font = bold
+    money(r, summary['total_expenses']).font = bold
     r += 2
 
     ws.cell(r, 1, 'Net Profit (period)').font = bold
-    money(r, net_profit).font = bold
+    money(r, summary['net_profit']).font = bold
     r += 2
 
     # Home Office Apportionment
@@ -208,13 +177,13 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     c.font = bold
     c.fill = header_fill
     r += 1
-    for cat in sorted(home_office_base):
+    for cat, amount in ho['components']:
         label = 'Insurance (building/contents)' if cat == INSURANCE_CATEGORY else cat
         ws.cell(r, 1, label)
-        money(r, home_office_base[cat])
+        money(r, amount)
         r += 1
     ws.cell(r, 1, 'Subtotal').font = bold
-    money(r, ho_subtotal).font = bold
+    money(r, ho['subtotal']).font = bold
     r += 1
     ws.cell(r, 1, 'Office size (m²)')
     ws.cell(r, 2, float(office_sqm))
@@ -235,9 +204,9 @@ def write_provisional_summary_sheet(wb, transactions, start_date, end_date):
     c.font = bold
     c.fill = header_fill
     r += 1
-    for cat in sorted(medical_by_category):
+    for cat, amount in summary['medical']:
         ws.cell(r, 1, cat)
-        money(r, medical_by_category[cat])
+        money(r, amount)
         r += 1
     ws.cell(r, 1,
             'Not deducted from income. Supports the medical tax credit, '

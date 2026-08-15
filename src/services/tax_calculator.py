@@ -11,6 +11,8 @@ from decimal import Decimal
 from datetime import date
 from typing import Dict, Any, Optional
 
+from src.services.categorizer import APPORTIONED_CATEGORIES
+
 
 class SATaxCalculator:
     """Calculate South African personal income tax"""
@@ -274,12 +276,10 @@ class SATaxCalculator:
 
 
 # Home office apportionment configuration
-# Categories that should be apportioned based on home office percentage
-HOME_OFFICE_CATEGORIES = [
-    'Interest (Mortgage)',
-    'Municipal',
-    'Insurance',
-]
+# Categories apportioned by the home office percentage. Derived from the
+# 'apportion' flag on each CATEGORIES entry, so the category name is written
+# once; a rename cannot leave a category silently deducted in full.
+HOME_OFFICE_CATEGORIES = APPORTIONED_CATEGORIES
 
 # Default home office dimensions (can be overridden in function call)
 DEFAULT_HOME_OFFICE_SQM = Decimal('22')
@@ -307,11 +307,18 @@ INSURANCE_DEDUCTIBLE_RULES = [
 
 
 def insurance_deductible_amount(description, full_amount: Decimal) -> Decimal:
-    """Deductible building / household-contents portion of an insurance premium."""
+    """Deductible building / household-contents portion of an insurance premium.
+
+    `full_amount` is the signed expense impact: positive for a premium debit,
+    negative for a refund or reversal. A capped rule caps the magnitude, so a
+    reversal gives back at most what the debit could claim.
+    """
     desc = (description or '').upper()
     for pattern, rule in INSURANCE_DEDUCTIBLE_RULES:
         if pattern in desc:
             if 'amount' in rule:
+                if full_amount < 0:
+                    return max(-rule['amount'], full_amount)
                 return min(rule['amount'], full_amount)
             return (full_amount * rule['fraction']).quantize(Decimal('0.01'))
     return full_amount
@@ -415,7 +422,12 @@ def calculate_tax_from_transactions(
             income_breakdown[category] += abs(amount)
 
         elif category_type == 'business_expense':
-            full_amount = abs(amount)
+            # Signed expense impact: a debit is a positive expense, a refund or
+            # reversal is negative and nets off. abs() here would make a
+            # reversal increase the deduction, and would disagree with
+            # provisional_summary.qualifying_deductible, which the export and
+            # the in-app summary both use.
+            full_amount = -amount
             business_expense_count += 1
 
             # Track full amount before apportionment

@@ -8,8 +8,9 @@ transaction categorization, and tax report generation.
 
 - **PDF Statement Parsing**: Automatically extracts transactions from
   Standard Bank PDFs (cheques, credit card, mortgage)
-- **Smart Categorization**: Auto-categorizes transactions based on 30+
-  business rules
+- **Smart Categorization**: Auto-categorizes transactions across 50 categories,
+  with user-defined rules taking priority over the built-in patterns. Rules can
+  be re-applied to statements already imported (`flask recategorize`)
 - **Duplicate Detection**: Identifies and merges duplicate transactions
   from overlapping statements with persistent dismissal tracking
 - **Receipt Management**: Upload and view receipt scans/PDFs linked to transactions
@@ -25,9 +26,9 @@ transaction categorization, and tax report generation.
   SARS tax tables (2025/2026 and 2026/2027) with rebates and credits. The first
   provisional period pays 50% of the annual estimate; the second pays the balance
 - **Home Office Apportionment**: Apportions qualifying home expenses (bond
-  interest, rates, building/contents insurance) by office-to-home floor area;
-  insurance is reduced to its deductible building/contents portion, with motor
-  and life cover excluded
+  interest, home-loan account costs, rates, building/contents insurance) by
+  office-to-home floor area; insurance is reduced to its deductible
+  building/contents portion, with motor and life cover excluded
 - **Excel Export**: Generates a tax-practitioner workbook — a one-page
   Provisional Summary (income, deductible expenses, home-office box, medical
   credit) plus a detailed business-expense breakdown; personal expenses are
@@ -76,6 +77,10 @@ transaction categorization, and tax report generation.
    ```bash
    flask init-db
    ```
+
+   Starting the app also creates any missing tables and seeds any category that
+   is not yet in the database, so a deployment picks up new categories without
+   a manual step.
 
 5. **Run the app:**
 
@@ -238,9 +243,25 @@ credit, not a deduction):
 
 Format: `PnLMarAugforAug2025.xlsx` or `PnLSepFebforFeb2026.xlsx`
 
+## Re-applying categorization rules
+
+Categorization runs when a statement is imported, so changing a rule leaves
+transactions already in the database on their old category. To re-apply:
+
+```bash
+flask recategorize                  # uncategorized transactions only
+flask recategorize --all            # every transaction
+flask recategorize --all --include-manual
+```
+
+Manually edited transactions are skipped unless `--include-manual` is given, and
+a transaction no rule matches keeps the category it already has. The same
+operation is available at `POST /api/recategorize` with an optional
+`{"all": true, "include_manual": true}` body.
+
 ## Testing
 
-The application includes a comprehensive test suite with 81 tests covering:
+The application includes a test suite with 117 tests covering:
 
 - Tax calculations and SARS tax tables
 - Transaction categorization and rules

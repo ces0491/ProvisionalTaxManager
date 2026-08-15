@@ -235,6 +235,89 @@ class TestIncomeSourcesRoutes:
         assert rule is None
 
 
+class TestRecategorizeRoute:
+    """Re-applying rules to transactions already in the database.
+
+    Categorization otherwise runs only at import, so a change to the rules has
+    no effect on data already loaded until this runs.
+    """
+
+    def _uncategorized_transaction(self, db_session, description):
+        from src.database.models import Statement, Transaction
+        from datetime import date
+        from decimal import Decimal
+
+        statement = Statement.query.first()
+        transaction = Transaction(
+            statement_id=statement.id,
+            date=date(2025, 3, 18),
+            description=description,
+            amount=Decimal('-99.00'),
+            category_id=None
+        )
+        db_session.add(transaction)
+        db_session.commit()
+        return transaction
+
+    def test_recategorize_assigns_uncategorized_transactions(self, authenticated_client, db_session):
+        from src.database.models import Transaction
+
+        transaction = self._uncategorized_transaction(db_session, 'GOOGLE*WORKSPACE SHEET CC GO Debit')
+
+        response = authenticated_client.post('/api/recategorize', json={})
+
+        assert response.status_code == 200
+        assert json.loads(response.data)['success'] is True
+        assert Transaction.query.get(transaction.id).category.name == 'Technology/Software'
+
+    def test_recategorize_leaves_manual_edits_alone(self, authenticated_client, db_session):
+        """A hand correction must survive a rule re-run"""
+        from src.database.models import Transaction, Category
+
+        personal = Category.query.filter_by(name='Personal').first()
+        transaction = self._uncategorized_transaction(db_session, 'GOOGLE*WORKSPACE SHEET CC GO Debit')
+        transaction.category_id = personal.id
+        transaction.is_manual = True
+        db_session.commit()
+
+        authenticated_client.post('/api/recategorize', json={'all': True})
+
+        assert Transaction.query.get(transaction.id).category.name == 'Personal'
+
+    def test_recategorize_keeps_a_category_the_rules_no_longer_match(self, authenticated_client, db_session):
+        """No pattern matching is 'no opinion', so an assignment is not wiped"""
+        from src.database.models import Transaction, Category
+
+        tech = Category.query.filter_by(name='Technology/Software').first()
+        transaction = self._uncategorized_transaction(db_session, 'UNKNOWN MERCHANT XYZ')
+        transaction.category_id = tech.id
+        db_session.commit()
+
+        authenticated_client.post('/api/recategorize', json={'all': True})
+
+        assert Transaction.query.get(transaction.id).category.name == 'Technology/Software'
+
+    def test_recategorize_requires_authentication(self, client):
+        response = client.post('/api/recategorize', json={})
+        assert response.status_code in (302, 401)
+
+
+class TestExportRoute:
+    """The workbook handed to the practitioner must actually build"""
+
+    def test_export_produces_a_workbook(self, authenticated_client):
+        """The seeded fixture data falls in the 2025/2026 first period"""
+        response = authenticated_client.get('/export?period=first&year=2026')
+
+        assert response.status_code == 200
+        assert response.data[:2] == b'PK'  # xlsx is a zip container
+
+    def test_provisional_page_loads(self, authenticated_client):
+        """Same summary builder as the export, rendered on screen"""
+        response = authenticated_client.get('/provisional?period=first&year=2026')
+        assert response.status_code == 200
+
+
 class TestDuplicatesRoutes:
     """Test duplicate detection routes"""
 

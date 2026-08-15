@@ -199,6 +199,83 @@ class TestSATaxCalculator:
             previous_tax = result['tax_liability']
 
 
+class TestCalculatorSummaryParity:
+    """The Tax Calculator and the Provisional Summary read the same data.
+
+    They are separate code paths over the same transactions, and the workbook
+    handed to the practitioner is built from the second one. A divergence means
+    the export no longer reconciles to the figures on screen.
+    """
+
+    def _home_loan_rows(self, db_session):
+        from src.database.models import db, Account, Statement, Transaction, Category
+        from src.services.categorizer import init_categories_in_db
+
+        init_categories_in_db(db, Category)
+        category = Category.query.filter_by(name='Home Loan Costs').first()
+
+        account = Account(name='Home Loan', account_type='homeloan', account_number='999')
+        db_session.add(account)
+        db_session.flush()
+        statement = Statement(
+            account_id=account.id,
+            start_date=date(2025, 3, 1),
+            end_date=date(2025, 3, 31),
+            filename='homeloan.pdf'
+        )
+        db_session.add(statement)
+        db_session.flush()
+
+        rows = [
+            Transaction(statement_id=statement.id, date=date(2025, 3, 5),
+                        description='ADMINISTRATION FEE HL - SC',
+                        amount=Decimal('-69.00'), category_id=category.id),
+            Transaction(statement_id=statement.id, date=date(2025, 3, 6),
+                        description='ADMINISTRATION FEE HL - SC REVERSAL',
+                        amount=Decimal('69.00'), category_id=category.id),
+        ]
+        db_session.add_all(rows)
+        db_session.commit()
+        return rows
+
+    def test_reversed_expense_agrees_across_both_views(self, db_session):
+        """A debit and its reversal claim nothing on either path"""
+        from src.services.provisional_summary import build_provisional_summary
+
+        rows = self._home_loan_rows(db_session)
+
+        summary = build_provisional_summary(rows, date(2025, 3, 1), date(2025, 3, 31))
+        calculated = calculate_tax_from_transactions(
+            transactions=[{
+                'date': t.date,
+                'description': t.description,
+                'amount': t.amount,
+                'category': 'Home Loan Costs',
+                'category_type': 'business_expense',
+            } for t in rows],
+            period_start=date(2025, 3, 1),
+            period_end=date(2025, 3, 31),
+        )
+
+        assert summary['home_office']['subtotal'] == Decimal('0.00')
+        assert summary['home_office']['deduction'] == Decimal('0.00')
+        assert summary['total_expenses'] == calculated['period_expenses'] == Decimal('0.00')
+
+    def test_home_office_sizing_overrides_reach_the_summary(self, db_session):
+        """The summary honours the same office/house measurements the calculator does"""
+        from src.services.provisional_summary import build_provisional_summary
+
+        rows = self._home_loan_rows(db_session)[:1]  # the R69.00 debit only
+
+        summary = build_provisional_summary(
+            rows, date(2025, 3, 1), date(2025, 3, 31),
+            home_office_sqm=Decimal('20'), house_total_sqm=Decimal('200')
+        )
+
+        assert summary['home_office']['subtotal'] == Decimal('69.00')
+        assert summary['home_office']['deduction'] == Decimal('6.90')
+
+
 class TestCalculateTaxFromTransactions:
     """Test transaction-based tax calculation"""
 
@@ -245,6 +322,93 @@ class TestCalculateTaxFromTransactions:
         assert 'Entertainment (Personal)' not in result['expense_breakdown']
         # But should be in personal breakdown
         assert 'Entertainment (Personal)' in result['personal_breakdown']
+
+    def test_home_office_categories_are_apportioned_by_amount(self):
+        """Every apportioned category claims office% of its spend, not all of it.
+
+        Asserting the rand amount is the point: membership of
+        HOME_OFFICE_CATEGORIES is necessary but says nothing about whether the
+        apportionment branch actually ran.
+        """
+        transactions = [
+            {
+                'date': date(2025, 3, 5),
+                'description': description,
+                'amount': Decimal('-1000.00'),
+                'category': category,
+                'category_type': 'business_expense',
+            }
+            for category, description in [
+                ('Home Loan Costs', 'ADMINISTRATION FEE HL - SC'),
+                ('Interest (Mortgage)', 'SYSTEM INTEREST DEBIT'),
+                ('Municipal', 'CITY OF CAPE TOWN'),
+            ]
+        ]
+
+        result = calculate_tax_from_transactions(
+            transactions=transactions,
+            period_start=date(2025, 3, 1),
+            period_end=date(2025, 3, 31),
+            home_office_sqm=Decimal('20'),
+            house_total_sqm=Decimal('200'),
+        )
+
+        # 10% of R1,000 for each of the three categories
+        for category in ('Home Loan Costs', 'Interest (Mortgage)', 'Municipal'):
+            assert result['expense_breakdown_full'][category] == Decimal('1000.00')
+            assert result['expense_breakdown'][category] == Decimal('100.00')
+        assert result['period_expenses'] == Decimal('300.00')
+
+    def test_non_apportioned_category_is_deducted_in_full(self):
+        """The apportionment must not leak into ordinary business expenses"""
+        result = calculate_tax_from_transactions(
+            transactions=[{
+                'date': date(2025, 3, 5),
+                'description': 'ADMINISTRATION FEE Debit',
+                'amount': Decimal('-1000.00'),
+                'category': 'Fees/Bank charges',
+                'category_type': 'business_expense',
+            }],
+            period_start=date(2025, 3, 1),
+            period_end=date(2025, 3, 31),
+            home_office_sqm=Decimal('20'),
+            house_total_sqm=Decimal('200'),
+        )
+
+        assert result['expense_breakdown']['Fees/Bank charges'] == Decimal('1000.00')
+
+    def test_reversal_nets_off_the_expense(self):
+        """A reversed expense claims nothing.
+
+        abs() here would turn the reversal into a second deduction, and would
+        disagree with the Provisional Summary, which nets the pair to zero.
+        """
+        pair = [
+            {
+                'date': date(2025, 3, 5),
+                'description': 'ADMINISTRATION FEE HL - SC',
+                'amount': Decimal('-69.00'),
+                'category': 'Home Loan Costs',
+                'category_type': 'business_expense',
+            },
+            {
+                'date': date(2025, 3, 6),
+                'description': 'ADMINISTRATION FEE HL - SC REVERSAL',
+                'amount': Decimal('69.00'),
+                'category': 'Home Loan Costs',
+                'category_type': 'business_expense',
+            },
+        ]
+
+        result = calculate_tax_from_transactions(
+            transactions=pair,
+            period_start=date(2025, 3, 1),
+            period_end=date(2025, 3, 31),
+        )
+
+        assert result['expense_breakdown_full']['Home Loan Costs'] == Decimal('0.00')
+        assert result['expense_breakdown']['Home Loan Costs'] == Decimal('0.00')
+        assert result['period_expenses'] == Decimal('0.00')
 
     def test_calculate_tax_with_no_transactions(self):
         """Test calculation with no transactions"""

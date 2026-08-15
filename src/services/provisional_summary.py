@@ -21,8 +21,15 @@ from src.services.tax_calculator import (
 MEDICAL_CATEGORIES = {'Medical Aid', 'Medical Fees'}
 
 
-def office_pct():
-    return (DEFAULT_HOME_OFFICE_SQM / DEFAULT_HOUSE_TOTAL_SQM) if DEFAULT_HOUSE_TOTAL_SQM else Decimal('0')
+def office_pct(office_sqm=None, house_sqm=None):
+    """Home-office percentage, defaulting to the configured dimensions.
+
+    Takes the same overrides as calculate_tax_from_transactions so a caller can
+    drive the summary and the Tax Calculator off one set of measurements.
+    """
+    office_sqm = DEFAULT_HOME_OFFICE_SQM if office_sqm is None else Decimal(str(office_sqm))
+    house_sqm = DEFAULT_HOUSE_TOTAL_SQM if house_sqm is None else Decimal(str(house_sqm))
+    return (office_sqm / house_sqm) if house_sqm else Decimal('0')
 
 
 def qualifying_deductible(t):
@@ -61,13 +68,17 @@ def months_in_period(start_date, end_date):
     return months
 
 
-def build_provisional_summary(transactions, start_date, end_date):
+def build_provisional_summary(transactions, start_date, end_date,
+                              home_office_sqm=None, house_total_sqm=None):
     """Aggregate active transactions into the provisional summary + audit trail.
 
     `transactions` is any iterable of Transaction-like objects with category,
     description, amount, date, statement.account, is_deleted, is_duplicate.
+    `home_office_sqm` / `house_total_sqm` override the configured dimensions.
     """
-    pct = office_pct()
+    office_sqm = DEFAULT_HOME_OFFICE_SQM if home_office_sqm is None else Decimal(str(home_office_sqm))
+    house_sqm = DEFAULT_HOUSE_TOTAL_SQM if house_total_sqm is None else Decimal(str(house_total_sqm))
+    pct = office_pct(office_sqm, house_sqm)
     txns = [t for t in transactions if not t.is_deleted and not t.is_duplicate]
 
     income_by_month = defaultdict(lambda: Decimal('0'))
@@ -147,8 +158,8 @@ def build_provisional_summary(transactions, start_date, end_date):
         'home_office': {
             'components': sorted(home_office_base.items()),
             'subtotal': ho_subtotal,
-            'office_sqm': DEFAULT_HOME_OFFICE_SQM,
-            'house_sqm': DEFAULT_HOUSE_TOTAL_SQM,
+            'office_sqm': office_sqm,
+            'house_sqm': house_sqm,
             'office_pct': pct,
             'deduction': ho_deduction,
         },

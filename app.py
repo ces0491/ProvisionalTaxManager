@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from functools import wraps
 import calendar
+import click
 import hmac
 import os
 import tempfile
@@ -17,7 +18,7 @@ from flask_limiter.util import get_remote_address
 from src.config import Config
 from src.database.models import db, Account, Statement, Category, Transaction, ExpenseRule, Receipt, DismissedDuplicate, TaxYear
 from src.services.pdf_parser import BankStatementParser, detect_duplicates
-from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db, get_category_by_name
+from src.services.categorizer import categorize_transaction, is_inter_account_transfer, init_categories_in_db
 from src.services.excel_export import generate_tax_export
 from src.services.tax_calculator import calculate_tax_from_transactions
 from src.services.reports import aggregate_transactions, get_available_years, get_transactions_for_year
@@ -34,6 +35,29 @@ RECEIPT_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'}
 
 # Initialize database
 db.init_app(app)
+
+
+def bootstrap_database():
+    """Create tables and seed any category missing from the database.
+
+    Production runs `gunicorn app:app`, which never reaches the __main__ block
+    and never runs the `init-db` CLI command, so without this a category newly
+    added to CATEGORIES has no row. get_category_by_name then returns None, the
+    transaction is stored with category_id NULL, and every consumer treats it as
+    a non-deductible personal expense - worse than the category not existing.
+    """
+    with app.app_context():
+        db.create_all()
+        init_categories_in_db(db, Category)
+
+
+if os.environ.get('SKIP_DB_BOOTSTRAP', '').lower() not in ('1', 'true', 'yes'):
+    try:
+        bootstrap_database()
+    except Exception as exc:  # pragma: no cover - depends on deploy-time DB state
+        # A boot-time database problem must not stop the app from serving the
+        # login page; the health check would then never come up to report it.
+        app.logger.warning('Database bootstrap skipped: %s', exc)
 
 # CSRF protection for all state-changing requests (forms + JSON fetch via the
 # X-CSRFToken header). Disabled in tests via WTF_CSRF_ENABLED=False.
@@ -180,6 +204,45 @@ def auto_mark_duplicates():
     return marked_count
 
 
+def recategorize_transactions(only_uncategorized=True, include_manual=False):
+    """Re-run categorization over transactions already in the database.
+
+    Categorization otherwise runs only at import, so a change to CATEGORIES or
+    to the database rules leaves stored transactions on their old category.
+
+    A transaction the categorizer has no opinion on (no pattern matches) keeps
+    whatever category it already has - a removed pattern must not silently wipe
+    a good assignment. Manually edited transactions are skipped entirely unless
+    `include_manual` is set, so a hand correction is never overwritten.
+
+    Returns the number of transactions whose category changed.
+    """
+    query = Transaction.query.filter_by(is_deleted=False)
+    if only_uncategorized:
+        query = query.filter(Transaction.category_id.is_(None))
+    if not include_manual:
+        query = query.filter(Transaction.is_manual.isnot(True))
+
+    categories_by_name = {c.name: c for c in Category.query.all()}
+    rules = ExpenseRule.query.filter_by(is_active=True).all()
+
+    changed = 0
+    for transaction in query.all():
+        cat_name, _ = categorize_transaction(transaction.description, transaction.amount, rules)
+        if not cat_name:
+            continue
+        category = categories_by_name.get(cat_name)
+        new_id = category.id if category else None
+        if new_id is not None and new_id != transaction.category_id:
+            transaction.category_id = new_id
+            changed += 1
+
+    if changed:
+        db.session.commit()
+
+    return changed
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
@@ -191,6 +254,12 @@ def upload():
             return redirect(request.url)
 
         files = request.files.getlist('files[]')
+
+        # One lookup for the whole upload instead of a SELECT per transaction.
+        categories_by_name = {c.name: c for c in Category.query.all()}
+        # User-defined rules take priority over the hardcoded patterns.
+        rules = ExpenseRule.query.filter_by(is_active=True).all()
+        parsed_any = False
 
         for file in files:
             if file and file.filename.endswith('.pdf'):
@@ -232,12 +301,11 @@ def upload():
                         # Categorize - returns category name directly
                         cat_name, confidence = categorize_transaction(
                             trans_data['description'],
-                            trans_data['amount']
+                            trans_data['amount'],
+                            rules
                         )
 
-                        category = None
-                        if cat_name:
-                            category = get_category_by_name(db, Category, cat_name)
+                        category = categories_by_name.get(cat_name) if cat_name else None
 
                         # Skip inter-account transfers for income tracking
                         skip_income = False
@@ -255,18 +323,20 @@ def upload():
                         db.session.add(transaction)
 
                     db.session.commit()
+                    parsed_any = True
 
-                    # Auto-mark 100% duplicates
-                    auto_marked = auto_mark_duplicates()
-
-                    success_msg = f'Successfully uploaded and parsed {filename}'
-                    if auto_marked > 0:
-                        success_msg += f' ({auto_marked} duplicate{"s" if auto_marked != 1 else ""} auto-marked)'
-                    flash(success_msg, 'success')
+                    flash(f'Successfully uploaded and parsed {filename}', 'success')
 
                 except Exception as e:
                     db.session.rollback()
                     flash(f'Error parsing {filename}: {str(e)}', 'error')
+
+        # Duplicate detection compares every transaction against every other, so
+        # it runs once for the whole upload rather than once per file.
+        if parsed_any:
+            auto_marked = auto_mark_duplicates()
+            if auto_marked > 0:
+                flash(f'{auto_marked} duplicate{"s" if auto_marked != 1 else ""} auto-marked', 'success')
 
         return redirect(url_for('transactions'))
 
@@ -1219,12 +1289,42 @@ def delete_income_source(id):
     return jsonify({'success': True})
 
 
+@app.route('/api/recategorize', methods=['POST'])
+@login_required
+def api_recategorize():
+    """Re-apply categorization rules to transactions already imported."""
+    data = request.get_json(silent=True) or {}
+    only_uncategorized = not data.get('all', False)
+    include_manual = bool(data.get('include_manual', False))
+
+    changed = recategorize_transactions(
+        only_uncategorized=only_uncategorized,
+        include_manual=include_manual
+    )
+
+    return jsonify({'success': True, 'changed': changed})
+
+
 @app.cli.command()
 def init_db():
     """Initialize the database"""
     db.create_all()
     init_categories_in_db(db, Category)
     print("Database initialized!")
+
+
+@app.cli.command('recategorize')
+@click.option('--all', 'process_all', is_flag=True,
+              help='Re-run over every transaction, not only uncategorized ones.')
+@click.option('--include-manual', is_flag=True,
+              help='Also re-run over manually edited transactions.')
+def recategorize_command(process_all, include_manual):
+    """Re-apply categorization rules to transactions already imported."""
+    changed = recategorize_transactions(
+        only_uncategorized=not process_all,
+        include_manual=include_manual
+    )
+    print(f"Recategorized {changed} transaction{'s' if changed != 1 else ''}.")
 
 
 if __name__ == '__main__':
